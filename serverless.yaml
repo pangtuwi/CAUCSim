@@ -1,0 +1,10 @@
+service: caucsim-backend
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: eu-west-2   # London region
+
+functions:
+  api:
+    handler: index.handler # Assuming index.js contains module.exports.handler
