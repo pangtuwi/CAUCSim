@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAUCSim - F24 CFD Geometry Analyzer</title>
+  <meta name="description" content="Front-end geometry analysis and cloud compute CFD runner for Chipping Sodbury School's Greenpower F24 car.">
+  <link rel="stylesheet" href="style.css">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Import map for Three.js ES module mapping -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-glow"></div>
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M2 12c4-4 8-6 10-6s6 2 10 6c-4 4-8 6-10 6s-6-2-10-6z"/>
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/>
+        </svg>
+        <div class="logo-text">
+          <h1>CAUC<span>Sim</span></h1>
+          <p>F24 Aerodynamic CFD Toolkit</p>
+        </div>
+      </div>
+      
+      <div class="system-status">
+        <div class="status-indicator online">
+          <span class="dot"></span>
+          <span class="label">Local Server: <strong>Online</strong></span>
+        </div>
+        <div class="status-separator"></div>
+        <div class="status-indicator" id="storage-status">
+          <span class="dot"></span>
+          <span class="label">CAD Storage: <strong id="storage-status-val">Checking...</strong></span>
+        </div>
+        <div class="status-separator"></div>
+        <div class="status-indicator standby">
+          <span class="dot"></span>
+          <span class="label">OpenFOAM Engine: <strong>Standby</strong></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <!-- Left Panel: Upload and File Library -->
+      <aside class="sidebar control-panel">
+        <!-- Section 1: Upload Geometry -->
+        <section class="panel-section upload-section">
+          <div class="section-header">
+            <span class="step-num">01</span>
+            <h2>Import Geometry</h2>
+          </div>
+          <div class="upload-dropzone" id="dropzone">
+            <input type="file" id="file-input" accept=".stl" style="display: none;">
+            <div class="dropzone-content">
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+              </svg>
+              <p class="primary-text">Drag & drop F24 CAD geometry</p>
+              <p class="secondary-text">or <span class="browse-link">browse files</span></p>
+              <span class="file-limits">Supports ASCII/Binary .stl (max 500MB)</span>
+            </div>
+            <div class="upload-progress-container" id="upload-progress-bar" style="display: none;">
+              <div class="progress-bar-wrapper">
+                <div class="progress-fill" style="width: 0%"></div>
+              </div>
+              <div class="progress-status">
+                <span class="progress-percent">0%</span>
+                <span class="progress-filename">Uploading file...</span>
+              </div>
+            </div>
+          </div>
+          <div class="import-options" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <label for="unit-select" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">CAD Model Units:</label>
+            <select id="unit-select" class="select-field" style="width: 55%; font-size: 10px;">
+              <option value="auto" selected>Auto-Detect (m/mm)</option>
+              <option value="mm">Millimeters (mm)</option>
+              <option value="m">Meters (m)</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- Section 2: Library -->
+        <section class="panel-section library-section">
+          <div class="section-header">
+            <h2>Geometry Library</h2>
+            <button class="btn-icon" id="refresh-library-btn" title="Refresh library">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+          <div class="library-search">
+            <input type="text" id="library-search-input" placeholder="Search models...">
+          </div>
+          <div class="model-list-wrapper">
+            <div class="model-list-empty" id="library-empty" style="display: none;">
+              <p>No geometries imported yet.</p>
+            </div>
+            <ul class="model-list" id="library-list">
+              <!-- Dynamically populated -->
+              <li class="loading-placeholder">Loading geometries...</li>
+            </ul>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Center: 3D Viewport -->
+      <section class="viewport-area">
+        <div class="viewport-header">
+          <div class="model-info">
+            <h3 id="active-model-title">No Geometry Loaded</h3>
+            <span class="model-status-tag" id="active-model-status" style="display: none;">Active</span>
+          </div>
+          
+          <!-- Viewport toolbar -->
+          <div class="viewport-toolbar">
+            <!-- Shading Mode Group -->
+            <div class="control-group-label">Shading</div>
+            <div class="control-group">
+              <button class="btn-toggle active" data-render-mode="shaded" title="Shaded Solid">Solid</button>
+              <button class="btn-toggle" data-render-mode="wireframe" title="Wireframe Mesh">Wire</button>
+              <button class="btn-toggle" data-render-mode="points" title="Point Cloud">Points</button>
+            </div>
+            
+            <div class="toolbar-divider"></div>
+            
+            <!-- View Angle Group -->
+            <div class="control-group-label">Camera</div>
+            <div class="control-group">
+              <button class="btn-action" data-view="iso">ISO</button>
+              <button class="btn-action" data-view="top">TOP</button>
+              <button class="btn-action" data-view="front">FRONT</button>
+              <button class="btn-action" data-view="side">SIDE</button>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <!-- Helper Group -->
+            <div class="control-group">
+              <button class="btn-toggle-icon active" id="toggle-grid" title="Toggle Ground Grid">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"/>
+                </svg>
+              </button>
+              <button class="btn-toggle-icon active" id="toggle-axes" title="Toggle Coordinate Axes (X:Red, Y:Green, Z:Blue)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M12 2v20M2 12h20M12 2l4 4M12 2l-4 4"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3D Canvas Container -->
+        <div class="viewport-canvas-container" id="viewport-container">
+          <div class="viewport-overlay-alert" id="viewport-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+            </svg>
+            <p>Upload or select an STL file to render the 3D geometry</p>
+          </div>
+          <!-- Three.js Canvas will be injected here -->
+          
+          <!-- Dimensions Helper Labels -->
+          <div class="dimension-labels-container" id="dimension-labels" style="display: none;">
+            <div class="dim-label length-label">L: <span id="dim-len">-</span> mm</div>
+            <div class="dim-label width-label">W: <span id="dim-wid">-</span> mm</div>
+            <div class="dim-label height-label">H: <span id="dim-hei">-</span> mm</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Geometry Stats and Regulations Verification -->
+      <aside class="sidebar stats-panel">
+        <section class="panel-section stats-section">
+          <div class="section-header">
+            <span class="step-num">02</span>
+            <h2>Geometry Analysis</h2>
+          </div>
+          
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-label">Total Triangles</span>
+              <span class="stat-val" id="stat-triangles">-</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Total Vertices</span>
+              <span class="stat-val" id="stat-vertices">-</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Bounding Box Volume</span>
+              <span class="stat-val" id="stat-volume">-</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Model Surface Area</span>
+              <span class="stat-val" id="stat-surface-area">-</span>
+            </div>
+          </div>
+
+          <div class="frontal-area-box">
+            <h3>Aerodynamic Frontal Area</h3>
+            <p class="area-note">Calculated projected area along flow direction (Y-Z plane)</p>
+            <div class="area-result">
+              <span class="value" id="stat-frontal-area">-</span> <span class="unit">m²</span>
+            </div>
+            <div class="drag-calc-row" style="margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+              <label for="cd-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Assumed C<sub>d</sub>:</label>
+              <input type="number" id="cd-input" value="0.30" step="0.01" min="0.05" max="1.50" class="select-field" style="width: 45%; text-align: center; font-family: var(--font-mono); font-size: 11px;">
+            </div>
+            <div class="drag-result" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px;">
+              <span style="color: var(--text-secondary); font-weight: 500;">CdA (Drag Area):</span>
+              <span id="stat-cda" style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 700; font-size: 13px; text-shadow: 0 0 6px var(--accent-cyan-glow);">-</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- F24 Regulations Section -->
+        <section class="panel-section reg-section">
+          <div class="section-header">
+            <h2>F24 Regulations Checklist</h2>
+          </div>
+          <div class="reg-intro-text">
+            Validating against Greenpower F24 / F24+ design rules.
+          </div>
+          
+          <div class="reg-checklist">
+            <div class="reg-item" id="reg-len">
+              <div class="reg-indicator"></div>
+              <div class="reg-details">
+                <span class="name">Max Total Length (&le; 2400mm)</span>
+                <span class="value" id="reg-len-val">-</span>
+              </div>
+            </div>
+            
+            <div class="reg-item" id="reg-wid">
+              <div class="reg-indicator"></div>
+              <div class="reg-details">
+                <span class="name">Max Total Width (&le; 900mm)</span>
+                <span class="value" id="reg-wid-val">-</span>
+              </div>
+            </div>
+
+            <div class="reg-item" id="reg-hei">
+              <div class="reg-indicator"></div>
+              <div class="reg-details">
+                <span class="name">Max Height limit (CFD context)</span>
+                <span class="value" id="reg-hei-val">-</span>
+              </div>
+            </div>
+
+            <div class="reg-item" id="reg-watertight">
+              <div class="reg-indicator"></div>
+              <div class="reg-details">
+                <span class="name">Mesh Solvability (Watertight)</span>
+                <span class="value" id="reg-watertight-val">Not Checked</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="reg-summary-box" id="reg-summary">
+            No geometry loaded
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Client-side script loading main.js -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
