@@ -3,29 +3,29 @@ name: Deploy to AWS Lambda
 on:
   push:
     branches:
-      - main # Triggers the deployment whenever you push to the main branch
+      - main 
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pull down the fresh code from your GitHub repository
+      # 1. Pull down code - Updated from @v4 to @v5
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # 2. Set up the correct Node.js environment
+      # 2. Set up Node - Updated from @v4 to @v5
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-node-version: '22'
+          node-version: '22'
           cache: 'npm'
 
-      # 3. Install only production dependencies (keeps the Lambda file size tiny)
+      # 3. Install only production dependencies
       - name: Install production dependencies
         run: npm ci --only=production
 
-      # 4. Use the Serverless Framework to zip and push the update to AWS
+      # 4. Deploy using the Serverless Framework
       - name: Deploy to AWS Lambda
         uses: serverless/github-action@v3.2
         with:
