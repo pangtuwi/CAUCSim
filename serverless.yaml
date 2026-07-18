@@ -5,7 +5,7 @@ provider:
   runtime: nodejs20.x  # Change from 22.x to 20.x
   region: eu-west-2
   memorySize: 512
-  stage: '$default'    
+  stage: 'prod'    
 
 functions:
   api:
