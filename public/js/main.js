@@ -19,6 +19,8 @@ let currentFrontalArea = 0;
 let idToken = localStorage.getItem('caucsim_id_token') || null;
 let authMode = 'mock'; // 'cognito' | 'mock'
 let cognitoConfig = null;
+let authSession = null;
+let challengeEmail = null;
 
 
 
@@ -1055,6 +1057,18 @@ function handleLogout() {
   libraryList.innerHTML = '';
   libraryEmpty.style.display = 'block';
 
+  // Reset auth form state
+  authSession = null;
+  challengeEmail = null;
+  const challengeFields = document.getElementById('challenge-fields');
+  if (challengeFields) challengeFields.style.display = 'none';
+  if (authEmail) authEmail.closest('.form-group').style.display = 'flex';
+  if (authPassword) authPassword.closest('.form-group').style.display = 'flex';
+  if (btnLoginSubmit) {
+    btnLoginSubmit.disabled = false;
+    btnLoginSubmit.textContent = 'Sign In';
+  }
+
   validateSession();
 }
 
@@ -1063,8 +1077,60 @@ authForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   authError.style.display = 'none';
   btnLoginSubmit.disabled = true;
-  btnLoginSubmit.textContent = 'Signing in...';
   
+  if (authSession) {
+    // Challenge response flow (Confirm new password)
+    btnLoginSubmit.textContent = 'Confirming...';
+    const newPassword = document.getElementById('auth-new-password').value;
+    if (!newPassword || newPassword.length < 8) {
+      showAuthError('Password must be at least 8 characters long.');
+      return;
+    }
+    
+    try {
+      const cognitoUrl = `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`;
+      const response = await fetch(cognitoUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': 'AWSCognitoIdentityProviderService.RespondToAuthChallenge'
+        },
+        body: JSON.stringify({
+          ChallengeName: 'NEW_PASSWORD_REQUIRED',
+          ClientId: cognitoConfig.clientId,
+          ChallengeResponses: {
+            USERNAME: challengeEmail,
+            NEW_PASSWORD: newPassword
+          },
+          Session: authSession
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Password change failed.');
+      }
+      
+      // Success! Cognito returns tokens under AuthenticationResult
+      const token = data.AuthenticationResult.IdToken;
+      
+      // Reset form visual structure back to normal login state
+      authSession = null;
+      challengeEmail = null;
+      document.getElementById('challenge-fields').style.display = 'none';
+      authEmail.closest('.form-group').style.display = 'flex';
+      authPassword.closest('.form-group').style.display = 'flex';
+      document.getElementById('auth-new-password').value = '';
+      
+      handleLoginSuccess(token);
+    } catch (err) {
+      showAuthError(err.message || 'Failed to update password.');
+    }
+    return;
+  }
+  
+  // Normal Login Flow
+  btnLoginSubmit.textContent = 'Signing in...';
   const email = authEmail.value.trim();
   const password = authPassword.value;
   
@@ -1098,6 +1164,23 @@ authForm.addEventListener('submit', async (e) => {
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.message || 'Cognito authentication failed');
+      }
+      
+      if (!data.AuthenticationResult) {
+        if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+          // Transition form to password reset state
+          authSession = data.Session;
+          challengeEmail = email;
+          
+          authEmail.closest('.form-group').style.display = 'none';
+          authPassword.closest('.form-group').style.display = 'none';
+          document.getElementById('challenge-fields').style.display = 'flex';
+          btnLoginSubmit.textContent = 'Confirm New Password';
+          btnLoginSubmit.disabled = false;
+          authPassword.value = '';
+          return;
+        }
+        throw new Error('Authentication challenge required but not supported.');
       }
       
       const token = data.AuthenticationResult.IdToken;

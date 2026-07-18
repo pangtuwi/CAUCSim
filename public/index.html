@@ -303,6 +303,18 @@
           <label for="auth-password" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Password</label>
           <input type="password" id="auth-password" required placeholder="••••••••" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;">
         </div>
+
+        <!-- Cognito Challenge Fields -->
+        <div id="challenge-fields" style="display: none; flex-direction: column; gap: 15px;">
+          <div style="border-left: 2px solid var(--accent-cyan); padding-left: 10px; margin-bottom: 5px;">
+            <h4 style="margin: 0; font-size: 13px; color: var(--text-primary);">First-Time Sign In</h4>
+            <p style="margin: 2px 0 0 0; font-size: 11px; color: var(--text-secondary);">Your temporary password has expired. Please set a new permanent password.</p>
+          </div>
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: left;">
+            <label for="auth-new-password" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">New Password</label>
+            <input type="password" id="auth-new-password" placeholder="Min 8 characters" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;">
+          </div>
+        </div>
         
         <div class="error-message" id="auth-error" style="display: none; color: var(--danger-color); font-size: 12px; background: rgba(255, 61, 0, 0.05); border: 1px solid rgba(255, 61, 0, 0.15); padding: 8px 12px; border-radius: 6px; text-align: left; font-weight: 500;"></div>
         
