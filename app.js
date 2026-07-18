@@ -49,18 +49,25 @@ if (!bucketName) {
 // AWS Cognito Configuration
 const userPoolId = process.env.COGNITO_USER_POOL_ID;
 const clientId = process.env.COGNITO_CLIENT_ID;
-const useCognito = !!(userPoolId && clientId);
+
+// Force Cognito auth mode in production/Lambda environments to prevent mock bypass vulnerabilities
+const isProduction = process.env.NODE_ENV === 'production' || isLambda;
+const useCognito = isProduction || !!(userPoolId && clientId);
 
 const { CognitoJwtVerifier } = require("aws-jwt-verify");
 let verifier = null;
 
 if (useCognito) {
-  verifier = CognitoJwtVerifier.create({
-    userPoolId: userPoolId,
-    tokenUse: "id",
-    clientId: clientId
-  });
-  console.log("AWS Cognito Authentication initialized.");
+  if (userPoolId && clientId) {
+    verifier = CognitoJwtVerifier.create({
+      userPoolId: userPoolId,
+      tokenUse: "id",
+      clientId: clientId
+    });
+    console.log("AWS Cognito Authentication initialized.");
+  } else {
+    console.error("FATAL ERROR: AWS Cognito environment variables (COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID) are missing in production!");
+  }
 } else {
   console.warn("WARNING: AWS Cognito credentials not configured. Running in Mock Authentication Mode.");
 }
@@ -84,6 +91,10 @@ const requireAuth = async (req, res, next) => {
   }
   
   // Cognito Auth Mode
+  if (!verifier) {
+    return res.status(500).json({ error: "Cognito authentication is enabled but not configured on the server." });
+  }
+  
   try {
     const payload = await verifier.verify(token);
     req.user = {

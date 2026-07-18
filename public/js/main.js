@@ -962,6 +962,12 @@ async function checkStorageStatus() {
   
   if (!storageStatusEl || !storageStatusVal) return;
 
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1' || 
+                      window.location.hostname.startsWith('192.168.') || 
+                      window.location.hostname.startsWith('10.') ||
+                      window.location.hostname.startsWith('172.');
+
   try {
     const response = await fetch('/api/status');
     if (!response.ok) throw new Error();
@@ -972,8 +978,8 @@ async function checkStorageStatus() {
     authMode = data.authMode || 'mock';
     cognitoConfig = data.cognito;
     
-    console.log("Set btnMockLogin display to:", authMode === 'mock' ? 'block' : 'none');
-    if (authMode === 'mock') {
+    console.log("Set btnMockLogin display to:", (authMode === 'mock' && isLocalhost) ? 'block' : 'none');
+    if (authMode === 'mock' && isLocalhost) {
       btnMockLogin.style.display = 'block';
     } else {
       btnMockLogin.style.display = 'none';
@@ -995,7 +1001,11 @@ async function checkStorageStatus() {
     storageStatusEl.className = 'status-indicator offline';
     storageStatusVal.textContent = 'Disconnected';
     storageStatusEl.title = 'Could not connect to storage provider status API.';
-    btnMockLogin.style.display = 'block'; // Enable mock login as fallback
+    if (isLocalhost) {
+      btnMockLogin.style.display = 'block'; // Enable mock login as fallback ONLY on localhost
+    } else {
+      btnMockLogin.style.display = 'none'; // Never show on live server
+    }
     validateSession();
   }
 }
