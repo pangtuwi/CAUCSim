@@ -24,6 +24,8 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **Local Mock Fallback:** If S3 configurations are absent, the application seamlessly runs in a local disk fallback mode, simulating presigned storage flows.
 - **Connection Status indicators:** The top bar header dynamically updates to display the connection status of the Local Server, CAD Storage (AWS S3 vs Local Mock, complete with S3 bucket tooltips), and the OpenFOAM Engine.
 
+### 4. Authentication via AWS Cognito.
+
 ---
 
 ## Getting Started
