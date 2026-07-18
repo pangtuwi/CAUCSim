@@ -10,7 +10,8 @@
     "aws-jwt-verify": "^5.2.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "serverless-http": "^4.0.0"
+    "serverless-http": "^4.0.0",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "jest": "^30.4.2",

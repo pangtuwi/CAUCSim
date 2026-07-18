@@ -113,12 +113,12 @@ body {
   left: 4px;
 }
 
-.brand-icon {
-  width: 28px;
-  height: 28px;
-  color: var(--accent-cyan);
-  filter: drop-shadow(0 0 8px var(--accent-cyan-glow));
-  animation: logo-pulse 4s infinite ease-in-out;
+.brand-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px var(--accent-cyan-glow));
+  mix-blend-mode: screen;
 }
 
 .logo-text h1 {
