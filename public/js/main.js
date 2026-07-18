@@ -1057,13 +1057,24 @@ function handleLogout() {
   libraryList.innerHTML = '';
   libraryEmpty.style.display = 'block';
 
-  // Reset auth form state
+  // Reset auth form state and re-enable HTML validation on default inputs
   authSession = null;
   challengeEmail = null;
   const challengeFields = document.getElementById('challenge-fields');
   if (challengeFields) challengeFields.style.display = 'none';
-  if (authEmail) authEmail.closest('.form-group').style.display = 'flex';
-  if (authPassword) authPassword.closest('.form-group').style.display = 'flex';
+  if (authEmail) {
+    authEmail.closest('.form-group').style.display = 'flex';
+    authEmail.required = true;
+  }
+  if (authPassword) {
+    authPassword.closest('.form-group').style.display = 'flex';
+    authPassword.required = true;
+  }
+  const newPasswordInput = document.getElementById('auth-new-password');
+  if (newPasswordInput) {
+    newPasswordInput.value = '';
+    newPasswordInput.required = false;
+  }
   if (btnLoginSubmit) {
     btnLoginSubmit.disabled = false;
     btnLoginSubmit.textContent = 'Sign In';
@@ -1081,7 +1092,8 @@ authForm.addEventListener('submit', async (e) => {
   if (authSession) {
     // Challenge response flow (Confirm new password)
     btnLoginSubmit.textContent = 'Confirming...';
-    const newPassword = document.getElementById('auth-new-password').value;
+    const newPasswordInput = document.getElementById('auth-new-password');
+    const newPassword = newPasswordInput.value;
     if (!newPassword || newPassword.length < 8) {
       showAuthError('Password must be at least 8 characters long.');
       return;
@@ -1120,10 +1132,16 @@ authForm.addEventListener('submit', async (e) => {
       document.getElementById('challenge-fields').style.display = 'none';
       authEmail.closest('.form-group').style.display = 'flex';
       authPassword.closest('.form-group').style.display = 'flex';
-      document.getElementById('auth-new-password').value = '';
+      newPasswordInput.value = '';
+      
+      // Re-enable validation on standard fields
+      authEmail.required = true;
+      authPassword.required = true;
+      newPasswordInput.required = false;
       
       handleLoginSuccess(token);
     } catch (err) {
+      console.error("Password update error:", err);
       showAuthError(err.message || 'Failed to update password.');
     }
     return;
@@ -1178,6 +1196,11 @@ authForm.addEventListener('submit', async (e) => {
           btnLoginSubmit.textContent = 'Confirm New Password';
           btnLoginSubmit.disabled = false;
           authPassword.value = '';
+          
+          // Disable validation on hidden fields and enable on new password field
+          authEmail.required = false;
+          authPassword.required = false;
+          document.getElementById('auth-new-password').required = true;
           return;
         }
         throw new Error('Authentication challenge required but not supported.');
@@ -1186,6 +1209,7 @@ authForm.addEventListener('submit', async (e) => {
       const token = data.AuthenticationResult.IdToken;
       handleLoginSuccess(token);
     } catch (err) {
+      console.error("Cognito login error:", err);
       showAuthError(err.message || 'Login failed. Please check credentials.');
     }
   }
@@ -1211,7 +1235,11 @@ function showAuthError(msg) {
   authError.textContent = msg;
   authError.style.display = 'block';
   btnLoginSubmit.disabled = false;
-  btnLoginSubmit.textContent = 'Sign In';
+  if (authSession) {
+    btnLoginSubmit.textContent = 'Confirm New Password';
+  } else {
+    btnLoginSubmit.textContent = 'Sign In';
+  }
 }
 
 // --- App Bootstrap ---
