@@ -1020,6 +1020,7 @@ async function checkStorageStatus() {
     storageStatusEl.className = 'status-indicator offline';
     storageStatusVal.textContent = 'Disconnected';
     storageStatusEl.title = 'Could not connect to storage provider status API.';
+    btnMockLogin.style.display = 'block'; // Enable mock login as fallback
     validateSession();
   }
 }
