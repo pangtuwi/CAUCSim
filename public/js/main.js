@@ -967,33 +967,6 @@ async function checkStorageStatus() {
     if (!response.ok) throw new Error();
     const data = await response.json();
     
-    if (data.storage === 'aws-s3') {
-      storageStatusEl.className = 'status-indicator online';
-      storageStatusVal.textContent = 'AWS S3';
-      storageStatusEl.title = `S3 Bucket: ${data.bucket || 'unknown'}\nRegion: ${data.region || 'unknown'}`;
-    } else {
-      storageStatusEl.className = 'status-indicator standby';
-      storageStatusVal.textContent = 'Local (Mock)';
-      storageStatusEl.title = 'AWS S3 is not configured. Running in Local Disk Mock Mode.';
-    }
-  } catch (err) {
-    storageStatusEl.className = 'status-indicator offline';
-    storageStatusVal.textContent = 'Disconnected';
-    storageStatusEl.title = 'Could not connect to storage provider status API.';
-  }
-}
-
-async function checkStorageStatus() {
-  const storageStatusEl = document.getElementById('storage-status');
-  const storageStatusVal = document.getElementById('storage-status-val');
-  
-  if (!storageStatusEl || !storageStatusVal) return;
-
-  try {
-    const response = await fetch('/api/status');
-    if (!response.ok) throw new Error();
-    const data = await response.json();
-    
     // Parse Auth Configuration
     authMode = data.authMode || 'mock';
     cognitoConfig = data.cognito;
