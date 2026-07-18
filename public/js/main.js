@@ -15,6 +15,11 @@ let activeUrl = null;
 let activeFileKey = null;
 let currentFrontalArea = 0;
 
+// Authentication State
+let idToken = localStorage.getItem('caucsim_id_token') || null;
+let authMode = 'mock'; // 'cognito' | 'mock'
+let cognitoConfig = null;
+
 
 
 // Elements
@@ -33,6 +38,16 @@ const libraryEmpty = document.getElementById('library-empty');
 const searchInput = document.getElementById('library-search-input');
 const refreshBtn = document.getElementById('refresh-library-btn');
 const cdInput = document.getElementById('cd-input');
+
+// Auth Elements
+const authModal = document.getElementById('auth-modal');
+const authForm = document.getElementById('auth-form');
+const authEmail = document.getElementById('auth-email');
+const authPassword = document.getElementById('auth-password');
+const authError = document.getElementById('auth-error');
+const btnLoginSubmit = document.getElementById('btn-login-submit');
+const btnMockLogin = document.getElementById('btn-mock-login');
+const btnLogout = document.getElementById('btn-logout');
 
 // Stats Elements
 const statTriangles = document.getElementById('stat-triangles');
@@ -609,8 +624,15 @@ function calculateFrontalArea(geometry, size) {
 
 // --- API Service Calls ---
 async function fetchLibrary(selectFileKey = null) {
+  if (!idToken) return;
   try {
-    const response = await fetch('/api/files');
+    const response = await fetch('/api/files', {
+      headers: { 'Authorization': `Bearer ${idToken}` }
+    });
+    if (response.status === 401) {
+      handleLogout();
+      return;
+    }
     if (!response.ok) throw new Error('Failed to load geometry library');
     
     const files = await response.json();
@@ -682,7 +704,8 @@ function renderLibraryList(files, selectFileKey = null) {
         try {
           // Send key directly. Express wildcard will catch uploads/... path.
           const deleteResponse = await fetch(`/api/files/${file.fileKey}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${idToken}` }
           });
           if (!deleteResponse.ok) throw new Error('Delete request failed');
           
@@ -751,7 +774,10 @@ async function uploadFile(file) {
     // Phase 1: Retrieve presigned URLs
     const response = await fetch('/api/get-upload-url', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
       body: JSON.stringify({ filename: file.name, fileType: file.type || 'application/octet-stream' })
     });
     
@@ -790,6 +816,10 @@ async function uploadFile(file) {
     });
 
     xhr.open('PUT', uploadUrl);
+    // Inject authorization token ONLY if uploading to our local mock server (relative path starts with /api/)
+    if (uploadUrl.startsWith('/api/')) {
+      xhr.setRequestHeader('Authorization', `Bearer ${idToken}`);
+    }
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.send(file); // Stream the raw file directly as the HTTP body
   } catch (err) {
@@ -936,6 +966,18 @@ async function checkStorageStatus() {
     const response = await fetch('/api/status');
     if (!response.ok) throw new Error();
     const data = await response.json();
+    console.log("Status API Response:", data);
+    
+    // Parse Auth Configuration
+    authMode = data.authMode || 'mock';
+    cognitoConfig = data.cognito;
+    
+    console.log("Set btnMockLogin display to:", authMode === 'mock' ? 'block' : 'none');
+    if (authMode === 'mock') {
+      btnMockLogin.style.display = 'block';
+    } else {
+      btnMockLogin.style.display = 'none';
+    }
     
     if (data.storage === 'aws-s3') {
       storageStatusEl.className = 'status-indicator online';
@@ -946,17 +988,148 @@ async function checkStorageStatus() {
       storageStatusVal.textContent = 'Local (Mock)';
       storageStatusEl.title = 'AWS S3 is not configured. Running in Local Disk Mock Mode.';
     }
+
+    validateSession();
   } catch (err) {
+    console.error("Status fetch failed:", err);
     storageStatusEl.className = 'status-indicator offline';
     storageStatusVal.textContent = 'Disconnected';
     storageStatusEl.title = 'Could not connect to storage provider status API.';
+    btnMockLogin.style.display = 'block'; // Enable mock login as fallback
+    validateSession();
   }
 }
 
+function validateSession() {
+  if (idToken) {
+    authModal.style.display = 'none';
+    btnLogout.style.display = 'block';
+    fetchLibrary();
+  } else {
+    authModal.style.display = 'flex';
+    btnLogout.style.display = 'none';
+  }
+}
+
+function handleLogout() {
+  idToken = null;
+  localStorage.removeItem('caucsim_id_token');
+  
+  // Clear Three.js scene
+  clearActiveGeometry();
+  viewportPlaceholder.style.display = 'flex';
+  dimensionLabels.style.display = 'none';
+  activeModelTitle.textContent = 'No Geometry Loaded';
+  activeModelStatus.style.display = 'none';
+  activeFileKey = null;
+  
+  // Clear Stats UI
+  statTriangles.textContent = '-';
+  statVertices.textContent = '-';
+  statVolume.textContent = '-';
+  statSurfaceArea.textContent = '-';
+  statFrontalArea.textContent = '-';
+  statCdA.textContent = '-';
+  currentFrontalArea = 0;
+  dimLen.textContent = '-';
+  dimHei.textContent = '-';
+  dimWid.textContent = '-';
+  regLenVal.textContent = '-';
+  regWidVal.textContent = '-';
+  regHeiVal.textContent = '-';
+  regWatertightVal.textContent = 'Not Checked';
+  regSummary.textContent = 'No geometry loaded';
+  regSummary.className = 'reg-summary-box';
+  document.querySelectorAll('.reg-item').forEach(el => el.className = 'reg-item');
+  
+  libraryList.innerHTML = '';
+  libraryEmpty.style.display = 'block';
+
+  validateSession();
+}
+
+// Bind Auth UI event listeners
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authError.style.display = 'none';
+  btnLoginSubmit.disabled = true;
+  btnLoginSubmit.textContent = 'Signing in...';
+  
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  
+  if (authMode === 'mock') {
+    // Mock login bypass helper: accept any credentials
+    if (email && password) {
+      handleLoginSuccess('mock-session-token');
+    } else {
+      showAuthError('Email and password are required.');
+    }
+  } else {
+    // Production Cognito HTTP flow
+    try {
+      const cognitoUrl = `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`;
+      const response = await fetch(cognitoUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
+        },
+        body: JSON.stringify({
+          AuthFlow: 'USER_PASSWORD_AUTH',
+          ClientId: cognitoConfig.clientId,
+          AuthParameters: {
+            USERNAME: email,
+            PASSWORD: password
+          }
+        })
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Cognito authentication failed');
+      }
+      
+      const token = data.AuthenticationResult.IdToken;
+      handleLoginSuccess(token);
+    } catch (err) {
+      showAuthError(err.message || 'Login failed. Please check credentials.');
+    }
+  }
+});
+
+btnMockLogin.addEventListener('click', () => {
+  handleLoginSuccess('mock-session-token');
+});
+
+btnLogout.addEventListener('click', handleLogout);
+
+function handleLoginSuccess(token) {
+  idToken = token;
+  localStorage.setItem('caucsim_id_token', token);
+  btnLoginSubmit.disabled = false;
+  btnLoginSubmit.textContent = 'Sign In';
+  authEmail.value = '';
+  authPassword.value = '';
+  validateSession();
+}
+
+function showAuthError(msg) {
+  authError.textContent = msg;
+  authError.style.display = 'block';
+  btnLoginSubmit.disabled = false;
+  btnLoginSubmit.textContent = 'Sign In';
+}
+
 // --- App Bootstrap ---
-window.addEventListener('DOMContentLoaded', () => {
+function bootstrapApp() {
   initThree();
   bindEvents();
   checkStorageStatus();
-  fetchLibrary();
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootstrapApp);
+} else {
+  bootstrapApp();
+}

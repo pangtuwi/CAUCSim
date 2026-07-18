@@ -24,7 +24,11 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **Local Mock Fallback:** If S3 configurations are absent, the application seamlessly runs in a local disk fallback mode, simulating presigned storage flows.
 - **Connection Status indicators:** The top bar header dynamically updates to display the connection status of the Local Server, CAD Storage (AWS S3 vs Local Mock, complete with S3 bucket tooltips), and the OpenFOAM Engine.
 
-### 4. Authentication via AWS Cognito.
+### 4. Authentication via AWS Cognito
+- **Secure Sign In:** Protects sensitive CAD files and simulation endpoints. The frontend communicates directly with AWS Cognito User Pools (via HTTP fetch) to exchange credentials for ID tokens.
+- **JWT Validation Middleware:** The Express server validates RS256 JWT signatures on all data requests using `aws-jwt-verify`.
+- **Developer Bypass (Mock Mode):** If Cognito configuration is omitted, the app starts in a local developer mode, providing an overlay bypass button.
+- **Setup Instructions:** Refer to [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) for step-by-step AWS Cognito User Pool creation.
 
 ---
 
@@ -46,8 +50,12 @@ AWS_REGION=eu-west-2
 # AWS Credentials (Required for local S3 testing; omit when deploying to Lambda)
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
+
+# AWS Cognito Configuration (Omit to use Mock Bypass Login mode)
+COGNITO_USER_POOL_ID=your_user_pool_id
+COGNITO_CLIENT_ID=your_app_client_id
 ```
-*Note: If `S3_BUCKET_NAME` is left blank, the app will automatically start in **Local Disk Mock Mode**.*
+*Note: If `S3_BUCKET_NAME` or `COGNITO_USER_POOL_ID` are left blank, the app will automatically fall back to **Local Disk Mock Mode** and **Mock Authentication Bypass Mode**.*
 
 ### 3. Run Locally
 Start the development server with watch mode enabled:

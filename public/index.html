@@ -54,6 +54,7 @@
           <span class="label">OpenFOAM Engine: <strong>Standby</strong></span>
         </div>
       </div>
+      <button id="btn-logout" class="btn-secondary" style="display: none; padding: 6px 12px; font-size: 11px; height: auto; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Log Out</button>
     </header>
 
     <!-- Main Workspace -->
@@ -280,6 +281,35 @@
         </section>
       </aside>
     </main>
+  </div>
+  
+  <!-- Authentication Modal Overlay -->
+  <div id="auth-modal" class="auth-overlay" style="display: flex;">
+    <div class="auth-modal-content">
+      <div class="auth-brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 32px; height: 32px; color: var(--accent-cyan); filter: drop-shadow(0 0 6px var(--accent-cyan-glow)); margin-bottom: 12px;">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <h2>Secure Sign In</h2>
+        <p>CAUCSim F24 CFD Platform</p>
+      </div>
+      
+      <form id="auth-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: left;">
+          <label for="auth-email" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Email Address</label>
+          <input type="email" id="auth-email" required placeholder="name@cauc.org" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;">
+        </div>
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: left;">
+          <label for="auth-password" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Password</label>
+          <input type="password" id="auth-password" required placeholder="••••••••" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;">
+        </div>
+        
+        <div class="error-message" id="auth-error" style="display: none; color: var(--danger-color); font-size: 12px; background: rgba(255, 61, 0, 0.05); border: 1px solid rgba(255, 61, 0, 0.15); padding: 8px 12px; border-radius: 6px; text-align: left; font-weight: 500;"></div>
+        
+        <button type="submit" class="btn-primary" id="btn-login-submit" style="width: 100%; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: var(--accent-cyan); color: #020408; border: none; box-shadow: 0 0 12px var(--accent-cyan-glow);">Sign In</button>
+        <button type="button" class="btn-secondary" id="btn-mock-login" style="display: none; margin-top: 5px; width: 100%; padding: 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); transition: all 0.2s;">Bypass Login (Developer Mode)</button>
+      </form>
+    </div>
   </div>
 
   <!-- Client-side script loading main.js -->
