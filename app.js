@@ -16,8 +16,14 @@ const port = process.env.PORT || 3000;
 // Enable JSON body parsing for API requests
 app.use(express.json());
 
-// Set up local directories (fallback for mock mode and frontend serving)
-const uploadDir = path.join(__dirname, 'uploads');
+// Detect if running in AWS Lambda vs local machine
+const isLambda = !!process.env.LAMBDA_TASK_ROOT;
+
+// Dynamically set directory path (/tmp for AWS Lambda, local folder for dev)
+const uploadDir = isLambda 
+  ? path.join('/tmp', 'uploads') 
+  : path.join(__dirname, 'uploads');
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
