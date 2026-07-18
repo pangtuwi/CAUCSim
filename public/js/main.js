@@ -966,11 +966,13 @@ async function checkStorageStatus() {
     const response = await fetch('/api/status');
     if (!response.ok) throw new Error();
     const data = await response.json();
+    console.log("Status API Response:", data);
     
     // Parse Auth Configuration
     authMode = data.authMode || 'mock';
     cognitoConfig = data.cognito;
     
+    console.log("Set btnMockLogin display to:", authMode === 'mock' ? 'block' : 'none');
     if (authMode === 'mock') {
       btnMockLogin.style.display = 'block';
     } else {
@@ -1120,8 +1122,14 @@ function showAuthError(msg) {
 }
 
 // --- App Bootstrap ---
-window.addEventListener('DOMContentLoaded', () => {
+function bootstrapApp() {
   initThree();
   bindEvents();
   checkStorageStatus();
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootstrapApp);
+} else {
+  bootstrapApp();
+}
