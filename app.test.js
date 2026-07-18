@@ -1,3 +1,6 @@
+// Force mock mode for API testing
+process.env.S3_BUCKET_NAME = '';
+
 const request = require('supertest');
 const app = require('./app');
 const fs = require('fs');
