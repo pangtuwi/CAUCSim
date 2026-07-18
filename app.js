@@ -46,6 +46,57 @@ if (!bucketName) {
   s3Client = new S3Client({ region });
 }
 
+// AWS Cognito Configuration
+const userPoolId = process.env.COGNITO_USER_POOL_ID;
+const clientId = process.env.COGNITO_CLIENT_ID;
+const useCognito = !!(userPoolId && clientId);
+
+const { CognitoJwtVerifier } = require("aws-jwt-verify");
+let verifier = null;
+
+if (useCognito) {
+  verifier = CognitoJwtVerifier.create({
+    userPoolId: userPoolId,
+    tokenUse: "id",
+    clientId: clientId
+  });
+  console.log("AWS Cognito Authentication initialized.");
+} else {
+  console.warn("WARNING: AWS Cognito credentials not configured. Running in Mock Authentication Mode.");
+}
+
+// Authentication Middleware
+const requireAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+  
+  const token = authHeader.split(" ")[1];
+  
+  if (!useCognito) {
+    // Mock Auth Mode: Accept a dummy token
+    if (token === "mock-session-token") {
+      req.user = { email: "developer@cauc.local" };
+      return next();
+    }
+    return res.status(401).json({ error: "Invalid mock session token" });
+  }
+  
+  // Cognito Auth Mode
+  try {
+    const payload = await verifier.verify(token);
+    req.user = {
+      email: payload.email,
+      sub: payload.sub
+    };
+    next();
+  } catch (err) {
+    console.error("JWT Verification failed:", err.message);
+    res.status(401).json({ error: "Unauthorized: Invalid token" });
+  }
+};
+
 // --- API Endpoints ---
 
 // 0. Get System Status & Storage configuration
@@ -54,12 +105,14 @@ app.get('/api/status', (req, res) => {
     status: 'online',
     storage: useMockS3 ? 'local-mock' : 'aws-s3',
     bucket: bucketName || null,
-    region: region
+    region: region,
+    authMode: useCognito ? 'cognito' : 'mock',
+    cognito: useCognito ? { clientId, region } : null
   });
 });
 
 // 1. Get Presigned Upload and Download URLs
-app.post('/api/get-upload-url', async (req, res) => {
+app.post('/api/get-upload-url', requireAuth, async (req, res) => {
   const { filename, fileType } = req.body;
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required' });
@@ -104,7 +157,7 @@ app.post('/api/get-upload-url', async (req, res) => {
 });
 
 // Mock S3 PUT upload handler (used only in local disk mock mode)
-app.put('/api/mock-upload/:fileKey', express.raw({ type: '*/*', limit: '500mb' }), (req, res) => {
+app.put('/api/mock-upload/:fileKey', requireAuth, express.raw({ type: '*/*', limit: '500mb' }), (req, res) => {
   if (!useMockS3) {
     return res.status(400).json({ error: 'Mock upload is only supported in Mock Mode' });
   }
@@ -124,7 +177,7 @@ app.put('/api/mock-upload/:fileKey', express.raw({ type: '*/*', limit: '500mb' }
 });
 
 // 2. Get Geometry Library List
-app.get('/api/files', async (req, res) => {
+app.get('/api/files', requireAuth, async (req, res) => {
   if (useMockS3) {
     // Local Mock S3 Mode
     fs.readdir(uploadDir, (err, files) => {
@@ -189,7 +242,7 @@ app.get('/api/files', async (req, res) => {
 });
 
 // 3. Delete Geometry File (supports sub-paths/folders like uploads/...)
-app.delete('/api/files/*fileKey', async (req, res) => {
+app.delete('/api/files/*fileKey', requireAuth, async (req, res) => {
   let fileKey = req.params.fileKey;
   if (Array.isArray(fileKey)) {
     fileKey = fileKey.join('/');
