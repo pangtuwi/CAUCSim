@@ -2,6 +2,8 @@
 
 Welcome! This file outlines the technical stack, architectural patterns, and testing protocols for AI coding agents working on the CAUCSim codebase.
 
+Paul Williams, July 2026
+
 ---
 
 ## 1. Core Architecture
