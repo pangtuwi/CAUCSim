@@ -118,7 +118,6 @@ body {
   width: auto;
   object-fit: contain;
   filter: drop-shadow(0 0 6px var(--accent-cyan-glow));
-  mix-blend-mode: screen;
 }
 
 .logo-text h1 {
