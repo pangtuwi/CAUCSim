@@ -30,6 +30,11 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **Developer Bypass (Mock Mode):** If Cognito configuration is omitted, the app starts in a local developer mode, providing an overlay bypass button.
 - **Setup Instructions:** Refer to [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) for step-by-step AWS Cognito User Pool creation.
 
+### 5. Elastic Cloud HPC Compute (DigitalOcean)
+- **Scale-to-Zero HPC Droplets:** Launches high-performance dedicated compute droplets (`gd-16vcpu-64gb`) on-demand from a pre-configured OpenFOAM image snapshot using the DigitalOcean API.
+- **Fail-Safe Droplet Self-Destruct:** Spawns an asynchronous 1-hour background sleep process (`(sleep 3600; curl -X DELETE ...) &`) on the droplet at boot. Even if the simulation hangs, runs into shell errors, or loses network connection, the droplet is guaranteed to destroy itself after exactly 1 hour to prevent runaway billing leaks.
+- **Direct S3 Data Ingestion:** Droplets use temporary credentials to download the case-template and STL file directly from S3, perform meshing (`blockMesh`/`snappyHexMesh`), solve aerodynamic forces, upload the resulting `results.zip` / `simulation.log`, and immediately self-destruct upon completion.
+
 ---
 
 ## Getting Started

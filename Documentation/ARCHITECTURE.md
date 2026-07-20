@@ -133,6 +133,16 @@ JOB_ID="{{JOB_ID}}"
 FILE_KEY="{{FILE_KEY}}"
 S3_BUCKET="s3://your-cauc-cfd-bucket"
 
+# Start background safety self-destruct timer (1 hour fallback to prevent runtime leaks)
+(
+  sleep 3600
+  echo "==> [SAFETY TIMEOUT] 1 hour elapsed. Self-destructing..."
+  DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+  curl -X DELETE \
+       -H "Authorization: Bearer {{DIGITALOCEAN_TOKEN}}" \
+       "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+) &
+
 # Notify API Server: Run Loop Initiated
 curl -X POST https://api.yourdomain.com/jobs/$JOB_ID/status \
      -H "Content-Type: application/json" \
@@ -169,4 +179,4 @@ curl -X DELETE \
 When passing this framework into your AI coding assistant, enforce compliance with these three paradigms:
 1. **Never Re-introduce Local Form Parsers:** All multi-part code, body-parsers tracking binary nodes, or temporary local file locks inside the Node.js process framework are strictly banned.
 2. **Stateless Operations:** Route handlers must process requests as isolated events. Ensure state vectors (such as simulation status tracking) are either queried out of an explicit state log cache (e.g., lightweight JSON state buffers on S3 or DynamoDB keys) or derived cleanly from external events.
-3. **Fail-Safe Self-Destruct Routines:** Compute provisioning blocks inside Node.js must explicitly register error paths or hard shell exits within the Cloud-Init script block to prevent zombie droplets from accumulating runtime charges under execution faults.
+3. **Fail-Safe Self-Destruct Routines:** Compute provisioning blocks inside Node.js must explicitly register error paths or hard shell exits within the Cloud-Init script block to prevent zombie droplets from accumulating runtime charges under execution faults. Additionally, an asynchronous background safety timer (e.g. `sleep 3600` followed by a DO delete request) should be spawned on boot inside the droplet's User Data to serve as a hard, automatic self-destruct cutoff (typically 1 hour) in case of system hang or API callback failure.

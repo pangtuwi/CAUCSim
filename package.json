@@ -2,7 +2,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "node --watch app.js",
-    "test": "jest"
+    "test": "jest",
+    "upload-template": "node scripts/upload-template.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",

@@ -1061,3 +1061,38 @@ body {
   color: var(--danger-color) !important;
   box-shadow: 0 0 10px rgba(255, 61, 0, 0.1);
 }
+
+/* CFD Simulation Runner & Console Styling */
+.terminal-console::-webkit-scrollbar {
+  width: 4px;
+}
+.terminal-console::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+.terminal-console::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+.terminal-console::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.status-badge.running {
+  animation: pulse-glow-cfd 2s infinite;
+}
+
+@keyframes pulse-glow-cfd {
+  0% {
+    box-shadow: 0 0 5px rgba(0, 240, 255, 0.2);
+    border-color: rgba(0, 240, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+    border-color: rgba(0, 240, 255, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(0, 240, 255, 0.2);
+    border-color: rgba(0, 240, 255, 0.3);
+  }
+}
+

@@ -158,4 +158,112 @@ describe('CAUCSim API Tests (Mock Mode & Auth)', () => {
       expect(response.body).toHaveProperty('error', 'File not found');
     });
   });
+
+  describe('CFD Job Orchestration Endpoints', () => {
+    let testJobId = '';
+    let testJobToken = '';
+
+    it('should reject POST /api/jobs without auth', async () => {
+      const response = await request(app)
+        .post('/api/jobs')
+        .send({ fileKey: 'uploads/test-car.stl' });
+      expect(response.status).toBe(401);
+    });
+
+    it('should trigger a simulated CFD job', async () => {
+      const response = await request(app)
+        .post('/api/jobs')
+        .set('Authorization', authHeaderValue)
+        .send({ fileKey: 'uploads/test-car.stl', frontalArea: 0.16 });
+      
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('jobId');
+      expect(response.body).toHaveProperty('status', 'queued');
+      expect(response.body).toHaveProperty('stage', 'initializing');
+      expect(response.body).not.toHaveProperty('jobToken'); // Hidden from client
+
+      testJobId = response.body.jobId;
+
+      // Read the actual state file to get the token for testing callback
+      const stateFolder = path.join(uploadDir, 'results', testJobId);
+      const stateFile = JSON.parse(fs.readFileSync(path.join(stateFolder, 'job.json'), 'utf8'));
+      testJobToken = stateFile.jobToken;
+    });
+
+    it('should list active and historical jobs', async () => {
+      const response = await request(app)
+        .get('/api/jobs')
+        .set('Authorization', authHeaderValue);
+      
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      const foundJob = response.body.find(j => j.jobId === testJobId);
+      expect(foundJob).toBeDefined();
+      expect(foundJob).not.toHaveProperty('jobToken');
+    });
+
+    it('should retrieve individual job status', async () => {
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}`)
+        .set('Authorization', authHeaderValue);
+      
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('jobId', testJobId);
+      expect(response.body).not.toHaveProperty('jobToken');
+    });
+
+    it('should reject droplet callback with invalid token', async () => {
+      const response = await request(app)
+        .post(`/api/jobs/${testJobId}/callback`)
+        .set('X-Job-Token', 'invalid-token')
+        .send({ status: 'running', stage: 'solving' });
+      
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error', 'Unauthorized: Invalid job token');
+    });
+
+    it('should update job status via droplet callback', async () => {
+      const response = await request(app)
+        .post(`/api/jobs/${testJobId}/callback`)
+        .set('X-Job-Token', testJobToken)
+        .send({ 
+          status: 'running', 
+          stage: 'solving',
+          metrics: {
+            cd: 0.28,
+            cl: -0.12,
+            cm: 0.01,
+            cda: 0.0448,
+            cla: -0.0192,
+            aref: 0.16
+          }
+        });
+      
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('message', 'Job state updated');
+
+      // Verify state was written and metrics recalculated
+      const updatedJob = JSON.parse(fs.readFileSync(path.join(uploadDir, 'results', testJobId, 'job.json'), 'utf8'));
+      expect(updatedJob.status).toBe('running');
+      expect(updatedJob.stage).toBe('solving');
+      expect(updatedJob.metrics).toHaveProperty('dragForce', 4.9); // 0.5 * 1.225 * 13.4^2 * 0.0448 = 4.928 -> 4.9
+      expect(updatedJob.metrics).toHaveProperty('aeroPower', 66); // 4.928 * 13.4 = 66.035 -> 66
+    });
+
+    it('should return 404 for log of a non-existent job', async () => {
+      const response = await request(app)
+        .get('/api/jobs/non-existent-job/log')
+        .set('Authorization', authHeaderValue);
+      expect(response.status).toBe(404);
+    });
+
+    it('should clean up test job files', () => {
+      const resultsFolder = path.join(uploadDir, 'results', testJobId);
+      if (fs.existsSync(resultsFolder)) {
+        fs.rmSync(resultsFolder, { recursive: true, force: true });
+      }
+      expect(fs.existsSync(resultsFolder)).toBe(false);
+    });
+  });
 });
+

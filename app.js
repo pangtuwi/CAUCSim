@@ -291,6 +291,601 @@ app.delete('/api/files/*fileKey', requireAuth, async (req, res) => {
   }
 });
 
+
+// --- CFD Job Orchestration Helpers & Endpoints ---
+const crypto = require('crypto');
+
+// Save a job file (log or zip) to local mock directory or S3
+const saveJobFile = async (jobId, filename, content, contentType) => {
+  if (useMockS3) {
+    const jobFolder = path.join(uploadDir, 'results', jobId);
+    if (!fs.existsSync(jobFolder)) {
+      fs.mkdirSync(jobFolder, { recursive: true });
+    }
+    fs.writeFileSync(path.join(jobFolder, filename), content);
+  } else {
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/${filename}`,
+      Body: content,
+      ContentType: contentType || 'text/plain'
+    });
+    await s3Client.send(putCommand);
+  }
+};
+
+// Save job state JSON to S3 or local directory
+const saveJobState = async (jobId, state) => {
+  state.updatedAt = new Date().toISOString();
+  if (useMockS3) {
+    const jobFolder = path.join(uploadDir, 'results', jobId);
+    if (!fs.existsSync(jobFolder)) {
+      fs.mkdirSync(jobFolder, { recursive: true });
+    }
+    fs.writeFileSync(path.join(jobFolder, 'job.json'), JSON.stringify(state, null, 2));
+  } else {
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/job.json`,
+      Body: JSON.stringify(state, null, 2),
+      ContentType: 'application/json'
+    });
+    await s3Client.send(putCommand);
+  }
+};
+
+// Read job state JSON from S3 or local directory
+const getJobState = async (jobId) => {
+  if (useMockS3) {
+    const jobPath = path.join(uploadDir, 'results', jobId, 'job.json');
+    if (!fs.existsSync(jobPath)) return null;
+    try {
+      return JSON.parse(fs.readFileSync(jobPath, 'utf8'));
+    } catch (e) {
+      return null;
+    }
+  } else {
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: `results/${jobId}/job.json`
+      });
+      const response = await s3Client.send(getCommand);
+      const data = await response.Body.transformToString();
+      return JSON.parse(data);
+    } catch (err) {
+      if (err.name === 'NoSuchKey' || err.code === 'NoSuchKey') return null;
+      throw err;
+    }
+  }
+};
+
+// Simulated CFD runner for Local Mock Mode
+const runSimulatedJob = async (jobId, frontalArea) => {
+  const steps = [
+    { stage: 'mesh_generation', delay: 2000, log: '==> Running surfaceFeatures...\nGenerating eMesh files...\n==> Running blockMesh...\nGenerated background mesh...\n==> Running decomposePar...\nDecomposed domain into 16 subdomains.\n' },
+    { stage: 'solving', delay: 4000, log: '==> Running snappyHexMesh...\nCreated hex-dominant mesh...\n==> Running potentialFoam...\nInitialized pressure field...\n==> Running foamRun (solving simpleFoam)...\nTime = 100, residuals: p=0.001, U=0.0004\nTime = 200, residuals: p=0.0005, U=0.0001\nTime = 300, residuals: p=0.0001, U=0.00005\nTime = 400, residuals: p=0.00005, U=0.00001\nTime = 500, residuals: p=0.00001, U=0.000008\n' },
+    { stage: 'processing_results', delay: 4000, log: '==> Running reconstructPar...\nReconstructed mesh and fields.\n==> Calculating aerodynamic forces...\nParsed forceCoeffs.dat.\n==> Packaging results into results.zip...\n' }
+  ];
+
+  let cumulativeLog = '==> Initialization complete. Starting simulated OpenFOAM run.\n';
+  await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
+
+  for (const step of steps) {
+    await new Promise(resolve => setTimeout(resolve, step.delay));
+    const jobState = await getJobState(jobId);
+    if (!jobState || jobState.status === 'failed') return;
+
+    jobState.stage = step.stage;
+    jobState.status = 'running';
+    await saveJobState(jobId, jobState);
+
+    cumulativeLog += step.log;
+    await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
+  }
+
+  // Finalize simulation metrics
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  const jobState = await getJobState(jobId);
+  if (!jobState || jobState.status === 'failed') return;
+
+  const cd = (0.26 + Math.random() * 0.04).toFixed(3);
+  const cl = (-0.15 + Math.random() * 0.05).toFixed(3);
+  const cm = (0.01 + Math.random() * 0.01).toFixed(3);
+  const aref = parseFloat(frontalArea) || 0.15;
+  const cda = (cd * aref).toFixed(4);
+  const cla = (cl * aref).toFixed(4);
+  const raceSpeed = 13.4;
+  const dragForce = (0.5 * 1.225 * Math.pow(raceSpeed, 2) * cda).toFixed(1);
+  const liftForce = (0.5 * 1.225 * Math.pow(raceSpeed, 2) * cla).toFixed(1);
+  const aeroPower = (dragForce * raceSpeed).toFixed(0);
+
+  jobState.status = 'completed';
+  jobState.stage = 'completed';
+  jobState.completedAt = new Date().toISOString();
+  jobState.metrics = {
+    cd: parseFloat(cd),
+    cl: parseFloat(cl),
+    cm: parseFloat(cm),
+    cda: parseFloat(cda),
+    cla: parseFloat(cla),
+    aref: aref,
+    dragForce: parseFloat(dragForce),
+    liftForce: parseFloat(liftForce),
+    aeroPower: parseFloat(aeroPower)
+  };
+
+  await saveJobState(jobId, jobState);
+
+  cumulativeLog += '==> Simulation completed successfully!\n=============================================\n';
+  cumulativeLog += `Cd            : ${cd}\nCl            : ${cl}\nCm            : ${cm}\nCdA           : ${cda} m²\nClA           : ${cla} m²\n`;
+  cumulativeLog += `At race speed (${raceSpeed} m/s):\n`;
+  cumulativeLog += `  Drag force  : ${dragForce} N\n  Lift force  : ${liftForce} N\n  Aero power  : ${aeroPower} W\n=============================================\n`;
+  
+  await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
+  await saveJobFile(jobId, 'results.zip', Buffer.from('mock results zip content'), 'application/zip');
+};
+
+// 1. POST /api/jobs: Queue/start simulation
+app.post('/api/jobs', requireAuth, async (req, res) => {
+  const { fileKey, frontalArea } = req.body;
+  if (!fileKey) {
+    return res.status(400).json({ error: 'fileKey is required' });
+  }
+
+  const cleanFileKey = fileKey.replace(/[^a-zA-Z0-9./_-]/g, '_');
+  const jobId = `job-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const jobToken = crypto.randomBytes(16).toString('hex');
+  const originalName = fileKey.substring(fileKey.indexOf('_') + 1);
+
+  const initialJobState = {
+    jobId,
+    fileKey: cleanFileKey,
+    originalName,
+    status: 'queued',
+    stage: 'initializing',
+    error: null,
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    completedAt: null,
+    dropletId: null,
+    jobToken,
+    metrics: null
+  };
+
+  try {
+    await saveJobState(jobId, initialJobState);
+
+    const doToken = process.env.DIGITALOCEAN_TOKEN;
+    const doSnapshotName = process.env.DIGITALOCEAN_SNAPSHOT_NAME || 'openfoam-base';
+    
+    // Check if DO credentials are provided, if not fallback to simulated run
+    if (!doToken || useMockS3) {
+      console.log(`Starting simulated CFD job ${jobId}...`);
+      runSimulatedJob(jobId, frontalArea).catch(err => {
+        console.error("Simulated Job failed in background:", err);
+      });
+      
+      const clientState = { ...initialJobState };
+      delete clientState.jobToken;
+      return res.json(clientState);
+    }
+
+    // Real DigitalOcean launch
+    console.log(`Provisioning DigitalOcean droplet for job ${jobId}...`);
+    
+    // Resolve Snapshot ID
+    let snapshotId = process.env.DIGITALOCEAN_IMAGE_ID;
+    if (!snapshotId) {
+      const imagesRes = await fetch('https://api.digitalocean.com/v2/images?private=true', {
+        headers: { 'Authorization': `Bearer ${doToken}` }
+      });
+      if (!imagesRes.ok) {
+        throw new Error(`Failed to query DigitalOcean images: ${await imagesRes.text()}`);
+      }
+      const imagesData = await imagesRes.json();
+      const snapshot = (imagesData.images || []).find(img => img.name === doSnapshotName);
+      if (snapshot) {
+        snapshotId = snapshot.id;
+      }
+    }
+    
+    if (!snapshotId) {
+      throw new Error(`Could not resolve image snapshot '${doSnapshotName}'`);
+    }
+
+    // Resolve SSH Key Fingerprints
+    let sshKeys = [];
+    if (process.env.DIGITALOCEAN_SSH_KEY_FP) {
+      sshKeys.push(process.env.DIGITALOCEAN_SSH_KEY_FP);
+    } else {
+      const sshRes = await fetch('https://api.digitalocean.com/v2/ssh_keys', {
+        headers: { 'Authorization': `Bearer ${doToken}` }
+      });
+      if (sshRes.ok) {
+        const sshData = await sshRes.json();
+        if (sshData.ssh_keys && sshData.ssh_keys.length > 0) {
+          sshKeys.push(sshData.ssh_keys[0].fingerprint);
+        }
+      }
+    }
+
+    // Compile Cloud-Init (User Data Script)
+    const callbackUrl = process.env.APP_CALLBACK_URL || `${req.protocol}://${req.get('host')}`;
+    const userDataScript = `#!/bin/bash
+set -e
+exec > >(tee -ia /var/log/cloud-init-output.log) 2>&1
+
+JOB_ID="${jobId}"
+JOB_TOKEN="${jobToken}"
+CALLBACK_URL="${callbackUrl}/api/jobs/${jobId}/callback"
+S3_BUCKET="${bucketName}"
+STL_KEY="${cleanFileKey}"
+TEMPLATE_KEY="case-template.zip"
+AWS_REGION="${region}"
+
+# Start background safety self-destruct timer (1 hour = 3600s)
+(
+  sleep 3600
+  echo "==> [SAFETY TIMEOUT] 1 hour elapsed. Self-destructing droplet..."
+  DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+  curl -s -X DELETE \\
+       -H "Authorization: Bearer ${doToken}" \\
+       "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+) &
+
+# Notify API Server: Droplet booted, starting setup
+curl -s -X POST "$CALLBACK_URL" \\
+     -H "Content-Type: application/json" \\
+     -H "X-Job-Token: $JOB_TOKEN" \\
+     -d '{"status": "running", "stage": "initializing"}'
+
+# Configure AWS CLI
+export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
+export AWS_SECRET_ACCESS_KEY="${process.env.AWS_SECRET_ACCESS_KEY || ''}"
+export AWS_DEFAULT_REGION="$AWS_REGION"
+
+# Create run directory
+mkdir -p /root/cfd_run
+cd /root/cfd_run
+
+# Download case template and user STL file from S3
+echo "==> Downloading case template from S3..."
+aws s3 cp "s3://$S3_BUCKET/$TEMPLATE_KEY" ./template.zip
+
+echo "==> Extracting case template..."
+apt-get update && apt-get install -y unzip zip
+unzip -o template.zip
+rm template.zip
+
+# Ensure geometry folder exists
+mkdir -p constant/geometry
+
+echo "==> Downloading STL geometry..."
+aws s3 cp "s3://$S3_BUCKET/$STL_KEY" constant/geometry/Basic_F24.stl
+
+# Notify API Server: Starting meshing
+curl -s -X POST "$CALLBACK_URL" \\
+     -H "Content-Type: application/json" \\
+     -H "X-Job-Token: $JOB_TOKEN" \\
+     -d '{"status": "running", "stage": "mesh_generation"}'
+
+# Load OpenFOAM environment
+export OMPI_ALLOW_RUN_AS_ROOT=1 
+export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+source /opt/openfoam13/etc/bashrc
+
+# Run execution pipeline
+echo "==> Running OpenFOAM pipeline..."
+chmod +x Allrun
+./Allrun > simulation.log 2>&1 || {
+  echo "==> Simulation failed!"
+  aws s3 cp simulation.log "s3://$S3_BUCKET/results/$JOB_ID/simulation.log"
+  curl -s -X POST "$CALLBACK_URL" \\
+       -H "Content-Type: application/json" \\
+       -H "X-Job-Token: $JOB_TOKEN" \\
+       -d '{"status": "failed", "stage": "solving", "error": "OpenFOAM execution failed"}'
+  
+  # Self destruct
+  DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+  curl -s -X DELETE \\
+       -H "Authorization: Bearer ${doToken}" \\
+       "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+  exit 1
+}
+
+# Notify API Server: Run completed, processing results
+curl -s -X POST "$CALLBACK_URL" \\
+     -H "Content-Type: application/json" \\
+     -H "X-Job-Token: $JOB_TOKEN" \\
+     -d '{"status": "running", "stage": "processing_results"}'
+
+# Compress results (excluding processor directories to save space/bandwidth)
+echo "==> Packaging results..."
+zip -r results.zip 0/ constant/ system/ postProcessing/ simulation.log -x "processor*" || true
+
+# Upload results back to S3
+echo "==> Uploading results to S3..."
+aws s3 cp results.zip "s3://$S3_BUCKET/results/$JOB_ID/results.zip"
+aws s3 cp simulation.log "s3://$S3_BUCKET/results/$JOB_ID/simulation.log"
+if [ -f postProcessing/forceCoeffs/0/forceCoeffs.dat ]; then
+  aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://$S3_BUCKET/results/$JOB_ID/forceCoeffs.dat"
+fi
+
+# Calculate force coefficients and compile aerodynamic metrics
+METRICS_JSON="{}"
+COEFFS_FILE="postProcessing/forceCoeffs/0/forceCoeffs.dat"
+if [ -f "$COEFFS_FILE" ]; then
+  METRICS_JSON=$(python3 - <<EOF
+import json
+try:
+    with open("$COEFFS_FILE", "r") as f:
+        lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    if lines:
+        last_line = lines[-1].split()
+        time = float(last_line[0])
+        cm = float(last_line[1])
+        cd = float(last_line[2])
+        cl = float(last_line[3])
+        
+        # Extract headers if present
+        aref = 1.0
+        with open("$COEFFS_FILE", "r") as f:
+            for line in f:
+                if "# Aref" in line:
+                    aref = float(line.split()[-1])
+                    break
+        
+        cda = cd * aref
+        cla = cl * aref
+        
+        print(json.dumps({
+            "cd": cd,
+            "cl": cl,
+            "cm": cm,
+            "cda": cda,
+            "cla": cla,
+            "aref": aref
+        }))
+    else:
+        print("{}")
+except Exception as e:
+    print(json.dumps({"error": str(e)}))
+EOF
+)
+fi
+
+# Notify API Server: Finished!
+curl -s -X POST "$CALLBACK_URL" \\
+     -H "Content-Type: application/json" \\
+     -H "X-Job-Token: $JOB_TOKEN" \\
+     -d "{\\"status\\": \\"completed\\", \\"stage\\": \\"completed\\", \\"metrics\\": $METRICS_JSON}"
+
+# Hard Self-Destruct to stop billing
+echo "==> Self-destructing droplet..."
+DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+curl -s -X DELETE \\
+     -H "Authorization: Bearer ${doToken}" \\
+     "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+`;
+
+    // Trigger Droplet Creation
+    const dropletPayload = {
+      name: `caucsim-cfd-${jobId}`,
+      region: process.env.DIGITALOCEAN_REGION || 'lon1',
+      size: process.env.DIGITALOCEAN_SIZE || 'gd-16vcpu-64gb',
+      image: snapshotId,
+      ssh_keys: sshKeys,
+      backups: false,
+      ipv6: false,
+      user_data: userDataScript,
+      tags: ['cfd-runner']
+    };
+
+    const doResponse = await fetch('https://api.digitalocean.com/v2/droplets', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${doToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(dropletPayload)
+    });
+
+    if (!doResponse.ok) {
+      const errText = await doResponse.text();
+      throw new Error(`DigitalOcean Droplet creation failed: ${errText}`);
+    }
+
+    const doData = await doResponse.json();
+    const dropletId = doData.droplet.id;
+
+    // Assign resource to Project
+    const doProjectId = process.env.DIGITALOCEAN_PROJECT_ID || 'efc7b19b-24a6-4149-bc96-4e90a71cdbd1';
+    if (doProjectId) {
+      await fetch(`https://api.digitalocean.com/v2/projects/${doProjectId}/resources`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${doToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          resources: [`do:droplet:${dropletId}`]
+        })
+      });
+    }
+
+    initialJobState.dropletId = dropletId;
+    initialJobState.status = 'running';
+    initialJobState.stage = 'initializing';
+    await saveJobState(jobId, initialJobState);
+
+    const clientState = { ...initialJobState };
+    delete clientState.jobToken;
+    res.json(clientState);
+
+  } catch (err) {
+    console.error("Failed to start CFD Job:", err);
+    res.status(500).json({ error: `Failed to initiate CFD job: ${err.message}` });
+  }
+});
+
+// 2. GET /api/jobs: List history of runs
+app.get('/api/jobs', requireAuth, async (req, res) => {
+  if (useMockS3) {
+    const resultsDir = path.join(uploadDir, 'results');
+    if (!fs.existsSync(resultsDir)) {
+      return res.json([]);
+    }
+    try {
+      const folders = fs.readdirSync(resultsDir);
+      const jobs = [];
+      for (const folder of folders) {
+        const jobPath = path.join(resultsDir, folder, 'job.json');
+        if (fs.existsSync(jobPath)) {
+          try {
+            const jobData = JSON.parse(fs.readFileSync(jobPath, 'utf8'));
+            const clientState = { ...jobData };
+            delete clientState.jobToken;
+            jobs.push(clientState);
+          } catch (e) {}
+        }
+      }
+      jobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+      res.json(jobs);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to list local mock jobs' });
+    }
+  } else {
+    try {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: 'results/'
+      });
+      const data = await s3Client.send(listCommand);
+      const jobKeys = (data.Contents || [])
+        .filter(item => item.Key.endsWith('job.json'))
+        .map(item => item.Key);
+      
+      const jobs = await Promise.all(
+        jobKeys.map(async key => {
+          const getCommand = new GetObjectCommand({
+            Bucket: bucketName,
+            Key: key
+          });
+          const response = await s3Client.send(getCommand);
+          const raw = await response.Body.transformToString();
+          const jobData = JSON.parse(raw);
+          const clientState = { ...jobData };
+          delete clientState.jobToken;
+          return clientState;
+        })
+      );
+      jobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+      res.json(jobs);
+    } catch (err) {
+      console.error("S3 List Jobs Error:", err);
+      res.status(500).json({ error: 'Failed to list jobs from S3' });
+    }
+  }
+});
+
+// 3. GET /api/jobs/:id: Fetch job metadata
+app.get('/api/jobs/:id', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  
+  const clientState = { ...jobState };
+  delete clientState.jobToken;
+  res.json(clientState);
+});
+
+// 4. POST /api/jobs/:id/callback: Droplet status callback
+app.post('/api/jobs/:id/callback', async (req, res) => {
+  const jobId = req.params.id;
+  const token = req.headers['x-job-token'];
+  
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  
+  if (jobState.jobToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid job token' });
+  }
+  
+  const { status, stage, error, metrics } = req.body;
+  if (status) jobState.status = status;
+  if (stage) jobState.stage = stage;
+  if (error) jobState.error = error;
+  if (metrics) {
+    if (metrics.cda) {
+      const raceSpeed = 13.4;
+      metrics.dragForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cda).toFixed(1));
+      if (metrics.cla) {
+        metrics.liftForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cla).toFixed(1));
+      }
+      metrics.aeroPower = parseFloat((metrics.dragForce * raceSpeed).toFixed(0));
+    }
+    jobState.metrics = metrics;
+  }
+  
+  if (status === 'completed' || status === 'failed') {
+    jobState.completedAt = new Date().toISOString();
+  }
+  
+  await saveJobState(jobId, jobState);
+  res.json({ message: 'Job state updated' });
+});
+
+// 5. GET /api/jobs/:id/log: Redirect or download simulation.log
+app.get('/api/jobs/:id/log', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  if (useMockS3) {
+    const logPath = path.join(uploadDir, 'results', jobId, 'simulation.log');
+    if (!fs.existsSync(logPath)) {
+      return res.status(404).json({ error: 'Log not found' });
+    }
+    return res.sendFile(logPath);
+  } else {
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: `results/${jobId}/simulation.log`
+      });
+      const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+      res.redirect(url);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to generate log download URL' });
+    }
+  }
+});
+
+// 6. GET /api/jobs/:id/download: Redirect or download results.zip
+app.get('/api/jobs/:id/download', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  if (useMockS3) {
+    const zipPath = path.join(uploadDir, 'results', jobId, 'results.zip');
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({ error: 'Results file not found' });
+    }
+    return res.sendFile(zipPath);
+  } else {
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: `results/${jobId}/results.zip`
+      });
+      const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+      res.redirect(url);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to generate results download URL' });
+    }
+  }
+});
+
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`Server is running on port ${port}`);

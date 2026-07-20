@@ -275,12 +275,101 @@
             No geometry loaded
           </div>
         </section>
+
+        <!-- CFD Simulation Section -->
+        <section class="panel-section cfd-section">
+          <div class="section-header">
+            <span class="step-num">03</span>
+            <h2>CFD Aero Simulation</h2>
+          </div>
+          
+          <div class="cfd-controls">
+            <button class="btn-primary" id="btn-run-cfd" disabled style="width: 100%; justify-content: center; display: flex; align-items: center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
+                <path d="M5 3l14 9-14 9V3z"/>
+              </svg>
+              Run CFD Simulation
+            </button>
+          </div>
+
+          <!-- Active Simulation Monitor (hidden by default) -->
+          <div class="cfd-monitor" id="cfd-monitor" style="display: none; margin-top: 15px;">
+            <div class="monitor-status-row" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="monitor-status-label" style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Status:</span>
+              <span class="status-badge running" id="cfd-status-badge" style="font-size: 11px; font-weight: 600; background: rgba(0, 240, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 2px 8px; border-radius: 12px;">Initializing</span>
+            </div>
+            
+            <div class="progress-bar-wrapper" style="margin-top: 8px; background: rgba(255, 255, 255, 0.05); height: 6px; border-radius: 3px; overflow: hidden;">
+              <div class="progress-fill" id="cfd-progress-fill" style="width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple)); height: 100%; transition: width 0.3s ease;"></div>
+            </div>
+            
+            <!-- Terminal Console for Logs -->
+            <div class="terminal-console-header" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+              <span>Execution Log</span>
+              <button class="btn-secondary" id="btn-toggle-console" style="padding: 2px 6px; height: auto; font-size: 9px; line-height: 1.2; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text-secondary);">Collapse</button>
+            </div>
+            <div class="terminal-console" id="cfd-console" style="margin-top: 6px; height: 120px; background: #020408; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 10px; overflow-y: auto; font-family: var(--font-mono); font-size: 10px; line-height: 1.4; color: #a5b4fc; white-space: pre-wrap;">
+              <div class="console-line system" style="color: var(--text-secondary);">Waiting for droplet boot...</div>
+            </div>
+          </div>
+
+          <!-- Simulation Results Panel (hidden by default) -->
+          <div class="cfd-results" id="cfd-results" style="display: none; margin-top: 15px;">
+            <div class="results-divider" style="height: 1px; background: rgba(255,255,255,0.06); margin-bottom: 12px;"></div>
+            <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Aerodynamic Results</h3>
+            
+            <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+              <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
+                <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Drag Coeff (Cd)</span>
+                <span class="stat-val" id="cfd-cd" style="font-size: 15px; font-weight: 700; color: var(--accent-cyan); font-family: var(--font-mono);">-</span>
+              </div>
+              <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
+                <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Drag Area (CdA)</span>
+                <span class="stat-val" id="cfd-cda" style="font-size: 15px; font-weight: 700; color: var(--accent-cyan); font-family: var(--font-mono);">-</span>
+              </div>
+              <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
+                <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Lift Coeff (Cl)</span>
+                <span class="stat-val" id="cfd-cl" style="font-size: 15px; font-weight: 700; color: var(--accent-purple); font-family: var(--font-mono);">-</span>
+              </div>
+              <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
+                <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Lift Area (ClA)</span>
+                <span class="stat-val" id="cfd-cla" style="font-size: 15px; font-weight: 700; color: var(--accent-purple); font-family: var(--font-mono);">-</span>
+              </div>
+            </div>
+
+            <!-- Forces at Speed -->
+            <div class="forces-table" style="background: rgba(0, 0, 0, 0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+              <div class="force-row" style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span class="label" style="font-size: 11px; color: var(--text-secondary);">Drag Force (at 13.4 m/s):</span>
+                <span class="val" id="cfd-drag-force" style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-primary);">-</span>
+              </div>
+              <div class="force-row" style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span class="label" style="font-size: 11px; color: var(--text-secondary);">Lift Force (at 13.4 m/s):</span>
+                <span class="val" id="cfd-lift-force" style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-primary);">-</span>
+              </div>
+              <div class="force-row" style="display: flex; justify-content: space-between;">
+                <span class="label" style="font-size: 11px; color: var(--text-secondary); font-weight: 600;">Aero Power Required:</span>
+                <span class="val" id="cfd-power" style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-cyan);">-</span>
+              </div>
+            </div>
+
+            <div class="cfd-actions" style="margin-top: 15px; display: flex; gap: 8px;">
+              <a href="#" id="lnk-download-results" class="btn-secondary" style="flex: 1; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;" target="_blank">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                Download ZIP
+              </a>
+              <button class="btn-secondary" id="btn-clear-cfd" style="flex: 1; justify-content: center; display: flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Clear Run</button>
+            </div>
+          </div>
+        </section>
       </aside>
     </main>
   </div>
   
   <!-- Authentication Modal Overlay -->
-  <div id="auth-modal" class="auth-overlay" style="display: flex;">
+  <div id="auth-modal" class="auth-overlay" style="display: none;">
     <div class="auth-modal-content">
       <div class="auth-brand">
         <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 32px; height: 32px; color: var(--accent-cyan); filter: drop-shadow(0 0 6px var(--accent-cyan-glow)); margin-bottom: 12px;">

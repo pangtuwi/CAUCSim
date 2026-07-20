@@ -74,6 +74,11 @@ const regWatertight = document.getElementById('reg-watertight');
 const regWatertightVal = document.getElementById('reg-watertight-val');
 const regSummary = document.getElementById('reg-summary');
 
+// Show login modal immediately if no token exists to prevent dashboard flashing
+if (!idToken) {
+  authModal.style.display = 'flex';
+}
+
 // --- Custom 3D Prominent Axes Helper (Cylinders and Cones) ---
 function createCustomAxesHelper(length = 200, thickness = 3.5) {
   const group = new THREE.Group();
@@ -956,6 +961,9 @@ function bindEvents() {
       loadSTL(activeFilename, activeUrl, activeFileKey);
     }
   });
+
+  // Initialize CFD Runner
+  initCfdRunner();
 }
 
 async function checkStorageStatus() {
@@ -1013,6 +1021,12 @@ async function checkStorageStatus() {
 }
 
 function validateSession() {
+  // If Cognito auth is enabled but we have a mock token in local storage, force a clean logout/re-auth
+  if (authMode === 'cognito' && idToken && !idToken.includes('.')) {
+    console.warn("Mock session token detected in Cognito mode. Forcing logout.");
+    handleLogout();
+  }
+
   if (idToken) {
     authModal.style.display = 'none';
     btnLogout.style.display = 'block';
@@ -1241,6 +1255,361 @@ function showAuthError(msg) {
     btnLoginSubmit.textContent = 'Sign In';
   }
 }
+
+// --- CFD Simulation Runner Client Logic ---
+let cfdPollInterval = null;
+let activeJobId = localStorage.getItem('caucsim_active_job_id') || null;
+let isConsoleCollapsed = false;
+
+function showCfdMonitor(show) {
+  const el = document.getElementById('cfd-monitor');
+  if (el) el.style.display = show ? 'block' : 'none';
+}
+
+function showCfdResults(show) {
+  const el = document.getElementById('cfd-results');
+  if (el) el.style.display = show ? 'block' : 'none';
+}
+
+async function startCfdSimulation() {
+  if (!activeFileKey) {
+    alert("Please load a geometry model first.");
+    return;
+  }
+  
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (!btnRunCfd) return;
+  btnRunCfd.disabled = true;
+  btnRunCfd.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px; display: inline-block; vertical-align: middle; animation: spin 1s linear infinite;">
+      <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.49 8.49l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.49-8.49l2.83-2.83"/>
+    </svg>
+    Launching Droplet...
+  `;
+  
+  try {
+    const response = await fetch('/api/jobs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+      },
+      body: JSON.stringify({
+        fileKey: activeFileKey,
+        frontalArea: currentFrontalArea
+      })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to start CFD simulation');
+    }
+    
+    const job = await response.json();
+    activeJobId = job.jobId;
+    localStorage.setItem('caucsim_active_job_id', activeJobId);
+    
+    // Reset and show console/monitor
+    const consoleEl = document.getElementById('cfd-console');
+    if (consoleEl) {
+      consoleEl.textContent = 'Launching droplet and configuring OpenFOAM environment...\n';
+    }
+    showCfdMonitor(true);
+    showCfdResults(false);
+    updateCfdMonitorState(job);
+    
+    // Start polling
+    startCfdPolling();
+    
+  } catch (err) {
+    console.error(err);
+    alert(`CFD Launch Error: ${err.message}`);
+    btnRunCfd.disabled = false;
+    btnRunCfd.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
+        <path d="M5 3l14 9-14 9V3z"/>
+      </svg>
+      Run CFD Simulation
+    `;
+  }
+}
+
+function startCfdPolling() {
+  if (cfdPollInterval) clearInterval(cfdPollInterval);
+  pollCfdStatus();
+  cfdPollInterval = setInterval(pollCfdStatus, 2000);
+}
+
+async function pollCfdStatus() {
+  if (!activeJobId) {
+    stopCfdPolling();
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/jobs/${activeJobId}`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        stopCfdPolling();
+        clearCfdRun();
+        return;
+      }
+      throw new Error('Failed to fetch job status');
+    }
+    
+    const job = await response.json();
+    updateCfdMonitorState(job);
+    await fetchCfdLogs();
+    
+    if (job.status === 'completed') {
+      stopCfdPolling();
+      displayCfdResults(job);
+    } else if (job.status === 'failed') {
+      stopCfdPolling();
+      displayFailedCfdState(job);
+    }
+  } catch (err) {
+    console.error("Error polling CFD status:", err);
+  }
+}
+
+function stopCfdPolling() {
+  if (cfdPollInterval) {
+    clearInterval(cfdPollInterval);
+    cfdPollInterval = null;
+  }
+}
+
+async function fetchCfdLogs() {
+  if (!activeJobId) return;
+  try {
+    const res = await fetch(`/api/jobs/${activeJobId}/log`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+      }
+    });
+    if (res.ok) {
+      const logText = await res.text();
+      const consoleEl = document.getElementById('cfd-console');
+      if (consoleEl) {
+        consoleEl.textContent = logText;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching logs:", e);
+  }
+}
+
+function updateCfdMonitorState(job) {
+  const statusBadge = document.getElementById('cfd-status-badge');
+  const progressFill = document.getElementById('cfd-progress-fill');
+  
+  if (!statusBadge || !progressFill) return;
+  
+  let stageName = 'Initializing';
+  let percent = 0;
+  
+  switch(job.stage) {
+    case 'initializing':
+      stageName = 'Initializing Droplet';
+      percent = 10;
+      break;
+    case 'mesh_generation':
+      stageName = 'Generating Mesh';
+      percent = 40;
+      break;
+    case 'solving':
+      stageName = 'Solving OpenFOAM';
+      percent = 75;
+      break;
+    case 'processing_results':
+      stageName = 'Packaging Results';
+      percent = 90;
+      break;
+    case 'completed':
+      stageName = 'Completed';
+      percent = 100;
+      break;
+    default:
+      stageName = job.status || 'Running';
+      percent = job.status === 'failed' ? 100 : 0;
+  }
+  
+  statusBadge.textContent = stageName;
+  progressFill.style.width = `${percent}%`;
+  
+  if (job.status === 'failed') {
+    statusBadge.textContent = 'Failed';
+    statusBadge.style.background = 'rgba(255, 61, 0, 0.1)';
+    statusBadge.style.borderColor = '#ff3d00';
+    statusBadge.style.color = '#ff3d00';
+    progressFill.style.background = '#ff3d00';
+  } else if (job.status === 'completed') {
+    statusBadge.style.background = 'rgba(51, 255, 51, 0.1)';
+    statusBadge.style.borderColor = '#33ff33';
+    statusBadge.style.color = '#33ff33';
+    progressFill.style.background = '#33ff33';
+  } else {
+    statusBadge.style.background = 'rgba(0, 240, 255, 0.1)';
+    statusBadge.style.borderColor = 'var(--accent-cyan)';
+    statusBadge.style.color = 'var(--accent-cyan)';
+    progressFill.style.background = 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple))';
+  }
+}
+
+function displayCfdResults(job) {
+  showCfdMonitor(false);
+  showCfdResults(true);
+  
+  const m = job.metrics;
+  if (!m) return;
+  
+  document.getElementById('cfd-cd').textContent = m.cd.toFixed(3);
+  document.getElementById('cfd-cda').textContent = m.cda.toFixed(4) + ' m²';
+  document.getElementById('cfd-cl').textContent = m.cl.toFixed(3);
+  document.getElementById('cfd-cla').textContent = m.cla.toFixed(4) + ' m²';
+  
+  document.getElementById('cfd-drag-force').textContent = m.dragForce.toFixed(1) + ' N';
+  document.getElementById('cfd-lift-force').textContent = m.liftForce.toFixed(1) + ' N';
+  document.getElementById('cfd-power').textContent = m.aeroPower.toFixed(0) + ' W';
+  
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (btnRunCfd) {
+    btnRunCfd.disabled = false;
+    btnRunCfd.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
+        <path d="M5 3l14 9-14 9V3z"/>
+      </svg>
+      Run CFD Simulation
+    `;
+  }
+}
+
+function displayFailedCfdState(job) {
+  showCfdMonitor(true);
+  showCfdResults(false);
+  const consoleEl = document.getElementById('cfd-console');
+  if (consoleEl) {
+    consoleEl.textContent += `\n\n[ERROR] CFD Simulation failed: ${job.error || 'Unknown Error'}\n`;
+  }
+  
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (btnRunCfd) {
+    btnRunCfd.disabled = false;
+    btnRunCfd.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
+        <path d="M5 3l14 9-14 9V3z"/>
+      </svg>
+      Run CFD Simulation
+    `;
+  }
+}
+
+function clearCfdRun() {
+  stopCfdPolling();
+  activeJobId = null;
+  localStorage.removeItem('caucsim_active_job_id');
+  showCfdMonitor(false);
+  showCfdResults(false);
+  
+  const consoleEl = document.getElementById('cfd-console');
+  if (consoleEl) {
+    consoleEl.textContent = 'Waiting for droplet boot...';
+  }
+  
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (btnRunCfd) {
+    btnRunCfd.disabled = !activeFileKey;
+    btnRunCfd.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
+        <path d="M5 3l14 9-14 9V3z"/>
+      </svg>
+      Run CFD Simulation
+    `;
+  }
+}
+
+function initCfdRunner() {
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  const btnToggleConsole = document.getElementById('btn-toggle-console');
+  const btnClearCfd = document.getElementById('btn-clear-cfd');
+  const downloadLnk = document.getElementById('lnk-download-results');
+  
+  if (btnRunCfd) {
+    btnRunCfd.addEventListener('click', startCfdSimulation);
+    btnRunCfd.disabled = !activeFileKey;
+  }
+  
+  if (btnToggleConsole) {
+    btnToggleConsole.addEventListener('click', () => {
+      const consoleEl = document.getElementById('cfd-console');
+      isConsoleCollapsed = !isConsoleCollapsed;
+      if (isConsoleCollapsed) {
+        consoleEl.style.display = 'none';
+        btnToggleConsole.textContent = 'Expand';
+      } else {
+        consoleEl.style.display = 'block';
+        btnToggleConsole.textContent = 'Collapse';
+      }
+    });
+  }
+  
+  if (btnClearCfd) {
+    btnClearCfd.addEventListener('click', clearCfdRun);
+  }
+  
+  if (downloadLnk) {
+    downloadLnk.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!activeJobId) return;
+      
+      try {
+        downloadLnk.style.pointerEvents = 'none';
+        downloadLnk.style.opacity = '0.5';
+        
+        const res = await fetch(`/api/jobs/${activeJobId}/download`, {
+          headers: {
+            'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+          }
+        });
+        
+        if (res.ok) {
+          window.open(res.url, '_blank');
+        } else {
+          alert("Failed to retrieve download URL.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Error downloading results.");
+      } finally {
+        downloadLnk.style.pointerEvents = 'auto';
+        downloadLnk.style.opacity = '1';
+      }
+    });
+  }
+  
+  if (activeJobId) {
+    showCfdMonitor(true);
+    startCfdPolling();
+  }
+}
+
+// Enable CFD button when stats are computed
+const originalComputeStats = computeStats;
+computeStats = function(geometry, size) {
+  originalComputeStats(geometry, size);
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (btnRunCfd && !activeJobId) {
+    btnRunCfd.disabled = false;
+  }
+};
 
 // --- App Bootstrap ---
 function bootstrapApp() {
