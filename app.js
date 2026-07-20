@@ -525,6 +525,11 @@ STL_KEY="${cleanFileKey}"
 TEMPLATE_KEY="case-template.zip"
 AWS_REGION="${region}"
 
+# Export AWS credentials immediately so all subshells/background loops inherit them
+export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
+export AWS_SECRET_ACCESS_KEY="${process.env.AWS_SECRET_ACCESS_KEY || ''}"
+export AWS_DEFAULT_REGION="\$AWS_REGION"
+
 # Start background safety self-destruct timer (1 hour = 3600s)
 (
   sleep 3600
@@ -599,10 +604,7 @@ unzip -q awscliv2.zip
 ./aws/install
 rm -rf awscliv2.zip aws/
 
-# Configure AWS CLI
-export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
-export AWS_SECRET_ACCESS_KEY="${process.env.AWS_SECRET_ACCESS_KEY || ''}"
-export AWS_DEFAULT_REGION="\$AWS_REGION"
+# AWS CLI credentials are already configured and exported at boot
 
 # Notify API Server: Droplet booted, starting setup
 update_job_status "running" "initializing"
@@ -933,7 +935,7 @@ app.post('/api/jobs/:id/callback', async (req, res) => {
   res.json({ message: 'Job state updated' });
 });
 
-// 5. GET /api/jobs/:id/log: Redirect or download simulation.log
+// 5. GET /api/jobs/:id/log: Stream simulation.log from S3 or local disk
 app.get('/api/jobs/:id/log', requireAuth, async (req, res) => {
   const jobId = req.params.id;
   if (useMockS3) {
@@ -948,10 +950,16 @@ app.get('/api/jobs/:id/log', requireAuth, async (req, res) => {
         Bucket: bucketName,
         Key: `results/${jobId}/simulation.log`
       });
-      const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-      res.redirect(url);
+      const response = await s3Client.send(getCommand);
+      const logText = await response.Body.transformToString();
+      res.setHeader('Content-Type', 'text/plain');
+      res.send(logText);
     } catch (err) {
-      res.status(500).json({ error: 'Failed to generate log download URL' });
+      if (err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
+        return res.status(404).json({ error: 'Log file not found on S3' });
+      }
+      console.error("Failed to retrieve log from S3:", err);
+      res.status(500).json({ error: 'Failed to retrieve log from S3' });
     }
   }
 });
