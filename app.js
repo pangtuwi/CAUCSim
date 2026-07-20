@@ -362,10 +362,11 @@ const getJobState = async (jobId) => {
 
 // Simulated CFD runner for Local Mock Mode
 const runSimulatedJob = async (jobId, frontalArea) => {
+  const isTest = process.env.NODE_ENV === 'test';
   const steps = [
-    { stage: 'mesh_generation', delay: 2000, log: '==> Running surfaceFeatures...\nGenerating eMesh files...\n==> Running blockMesh...\nGenerated background mesh...\n==> Running decomposePar...\nDecomposed domain into 16 subdomains.\n' },
-    { stage: 'solving', delay: 4000, log: '==> Running snappyHexMesh...\nCreated hex-dominant mesh...\n==> Running potentialFoam...\nInitialized pressure field...\n==> Running foamRun (solving simpleFoam)...\nTime = 100, residuals: p=0.001, U=0.0004\nTime = 200, residuals: p=0.0005, U=0.0001\nTime = 300, residuals: p=0.0001, U=0.00005\nTime = 400, residuals: p=0.00005, U=0.00001\nTime = 500, residuals: p=0.00001, U=0.000008\n' },
-    { stage: 'processing_results', delay: 4000, log: '==> Running reconstructPar...\nReconstructed mesh and fields.\n==> Calculating aerodynamic forces...\nParsed forceCoeffs.dat.\n==> Packaging results into results.zip...\n' }
+    { stage: 'mesh_generation', delay: isTest ? 0 : 2000, log: '==> Running surfaceFeatures...\nGenerating eMesh files...\n==> Running blockMesh...\nGenerated background mesh...\n==> Running decomposePar...\nDecomposed domain into 16 subdomains.\n' },
+    { stage: 'solving', delay: isTest ? 0 : 4000, log: '==> Running snappyHexMesh...\nCreated hex-dominant mesh...\n==> Running potentialFoam...\nInitialized pressure field...\n==> Running foamRun (solving simpleFoam)...\nTime = 100, residuals: p=0.001, U=0.0004\nTime = 200, residuals: p=0.0005, U=0.0001\nTime = 300, residuals: p=0.0001, U=0.00005\nTime = 400, residuals: p=0.00005, U=0.00001\nTime = 500, residuals: p=0.00001, U=0.000008\n' },
+    { stage: 'processing_results', delay: isTest ? 0 : 4000, log: '==> Running reconstructPar...\nReconstructed mesh and fields.\n==> Calculating aerodynamic forces...\nParsed forceCoeffs.dat.\n==> Packaging results into results.zip...\n' }
   ];
 
   let cumulativeLog = '==> Initialization complete. Starting simulated OpenFOAM run.\n';
@@ -385,7 +386,7 @@ const runSimulatedJob = async (jobId, frontalArea) => {
   }
 
   // Finalize simulation metrics
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, isTest ? 0 : 2000));
   const jobState = await getJobState(jobId);
   if (!jobState || jobState.status === 'failed') return;
 
