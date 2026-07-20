@@ -588,6 +588,10 @@ with open('updated_job.json', 'w') as f:
        -d "{\\"status\\": \\"\$status\\", \\"stage\\": \\"\$stage\\" \$( [ -n \\"\$error\\" ] && echo \\", \\\\\\\"error\\\\\\\": \\\\\\\"\$error\\\\\\\"\\" || echo \\"\\" ) \$( [ -n \\"\$metrics\\" ] && echo \\", \\\\\\\"metrics\\\\\\\": \$metrics\\" || echo \\"\\" )}" || true
 }
 
+# Install AWS CLI and archiving utilities immediately on boot
+echo "==> Installing system packages..."
+apt-get update && apt-get install -y awscli unzip zip
+
 # Configure AWS CLI
 export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
 export AWS_SECRET_ACCESS_KEY="${process.env.AWS_SECRET_ACCESS_KEY || ''}"
@@ -605,7 +609,6 @@ echo "==> Downloading case template from S3..."
 aws s3 cp "s3://\$S3_BUCKET/\$TEMPLATE_KEY" ./template.zip
 
 echo "==> Extracting case template..."
-apt-get update && apt-get install -y unzip zip
 unzip -o template.zip
 rm template.zip
 
