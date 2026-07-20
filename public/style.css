@@ -1362,4 +1362,20 @@ body {
   stroke: #ff9d00;
 }
 
+/* Version Badge */
+.version-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 4px rgba(0, 240, 255, 0.05);
+}
+
 
