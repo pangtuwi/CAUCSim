@@ -588,9 +588,16 @@ with open('updated_job.json', 'w') as f:
        -d "{\\"status\\": \\"\$status\\", \\"stage\\": \\"\$stage\\" \$( [ -n \\"\$error\\" ] && echo \\", \\\\\\\"error\\\\\\\": \\\\\\\"\$error\\\\\\\"\\" || echo \\"\\" ) \$( [ -n \\"\$metrics\\" ] && echo \\", \\\\\\\"metrics\\\\\\\": \$metrics\\" || echo \\"\\" )}" || true
 }
 
-# Install AWS CLI and archiving utilities immediately on boot
+# Install zip, unzip and curl utilities immediately on boot
 echo "==> Installing system packages..."
-apt-get update && apt-get install -y awscli unzip zip
+apt-get update && apt-get install -y unzip zip curl
+
+# Install official AWS CLI v2
+echo "==> Installing AWS CLI v2..."
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -q awscliv2.zip
+./aws/install
+rm -rf awscliv2.zip aws/
 
 # Configure AWS CLI
 export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
