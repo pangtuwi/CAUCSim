@@ -528,22 +528,72 @@ AWS_REGION="${region}"
 (
   sleep 3600
   echo "==> [SAFETY TIMEOUT] 1 hour elapsed. Self-destructing droplet..."
-  DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+  DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
   curl -s -X DELETE \\
-       -H "Authorization: Bearer ${doToken}" \\
-       "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+       -H "Authorization: Bearer \${doToken}" \\
+       "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
 ) &
 
-# Notify API Server: Droplet booted, starting setup
-curl -s -X POST "$CALLBACK_URL" \\
-     -H "Content-Type: application/json" \\
-     -H "X-Job-Token: $JOB_TOKEN" \\
-     -d '{"status": "running", "stage": "initializing"}'
+# Periodically push active log to S3 (every 5 seconds)
+(
+  while true; do
+    if [ -f /root/cfd_run/simulation.log ]; then
+      aws s3 cp /root/cfd_run/simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" --content-type "text/plain" || true
+    elif [ -f /var/log/cloud-init-output.log ]; then
+      aws s3 cp /var/log/cloud-init-output.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" --content-type "text/plain" || true
+    fi
+    sleep 5
+  done
+) &
+LOG_SYNC_PID=\$!
+
+# Helper function to update job state in S3 and callback URL
+update_job_status() {
+  local status="\$1"
+  local stage="\$2"
+  local error="\$3"
+  local metrics="\$4"
+  
+  # Fetch current state to preserve other fields, or initialize template
+  aws s3 cp "s3://\$S3_BUCKET/results/\$JOB_ID/job.json" current_job.json || echo '{"jobId":"'\$JOB_ID'"}' > current_job.json
+  
+  python3 -c "
+import json
+try:
+    with open('current_job.json', 'r') as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+data['status'] = '\$status'
+data['stage'] = '\$stage'
+data['updatedAt'] = '\$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+if '\$error':
+    data['error'] = '\$error'
+if '\$metrics':
+    try:
+        data['metrics'] = json.loads('''\$metrics''')
+    except Exception as e:
+        data['error'] = 'Failed to parse metrics: ' + str(e)
+with open('updated_job.json', 'w') as f:
+    json.dump(data, f, indent=2)
+"
+  # Push updated state file back to S3
+  aws s3 cp updated_job.json "s3://\$S3_BUCKET/results/\$JOB_ID/job.json" --content-type "application/json" || true
+  
+  # Execute fallback callback to local server (if accessible)
+  curl -s -X POST "\$CALLBACK_URL" \\
+       -H "Content-Type: application/json" \\
+       -H "X-Job-Token: \$JOB_TOKEN" \\
+       -d "{\\"status\\": \\"\$status\\", \\"stage\\": \\"\$stage\\" \$( [ -n \\"\$error\\" ] && echo \\", \\\\\\\"error\\\\\\\": \\\\\\\"\$error\\\\\\\"\\" || echo \\"\\" ) \$( [ -n \\"\$metrics\\" ] && echo \\", \\\\\\\"metrics\\\\\\\": \$metrics\\" || echo \\"\\" )}" || true
+}
 
 # Configure AWS CLI
 export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
 export AWS_SECRET_ACCESS_KEY="${process.env.AWS_SECRET_ACCESS_KEY || ''}"
-export AWS_DEFAULT_REGION="$AWS_REGION"
+export AWS_DEFAULT_REGION="\$AWS_REGION"
+
+# Notify API Server: Droplet booted, starting setup
+update_job_status "running" "initializing"
 
 # Create run directory
 mkdir -p /root/cfd_run
@@ -551,7 +601,7 @@ cd /root/cfd_run
 
 # Download case template and user STL file from S3
 echo "==> Downloading case template from S3..."
-aws s3 cp "s3://$S3_BUCKET/$TEMPLATE_KEY" ./template.zip
+aws s3 cp "s3://\$S3_BUCKET/\$TEMPLATE_KEY" ./template.zip
 
 echo "==> Extracting case template..."
 apt-get update && apt-get install -y unzip zip
@@ -562,13 +612,10 @@ rm template.zip
 mkdir -p constant/geometry
 
 echo "==> Downloading STL geometry..."
-aws s3 cp "s3://$S3_BUCKET/$STL_KEY" constant/geometry/Basic_F24.stl
+aws s3 cp "s3://\$S3_BUCKET/\$STL_KEY" constant/geometry/Basic_F24.stl
 
 # Notify API Server: Starting meshing
-curl -s -X POST "$CALLBACK_URL" \\
-     -H "Content-Type: application/json" \\
-     -H "X-Job-Token: $JOB_TOKEN" \\
-     -d '{"status": "running", "stage": "mesh_generation"}'
+update_job_status "running" "mesh_generation"
 
 # Load OpenFOAM environment
 export OMPI_ALLOW_RUN_AS_ROOT=1 
@@ -580,25 +627,22 @@ echo "==> Running OpenFOAM pipeline..."
 chmod +x Allrun
 ./Allrun > simulation.log 2>&1 || {
   echo "==> Simulation failed!"
-  aws s3 cp simulation.log "s3://$S3_BUCKET/results/$JOB_ID/simulation.log"
-  curl -s -X POST "$CALLBACK_URL" \\
-       -H "Content-Type: application/json" \\
-       -H "X-Job-Token: $JOB_TOKEN" \\
-       -d '{"status": "failed", "stage": "solving", "error": "OpenFOAM execution failed"}'
+  aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log"
+  update_job_status "failed" "solving" "OpenFOAM execution failed"
+  
+  # Terminate log sync background process
+  kill \$LOG_SYNC_PID || true
   
   # Self destruct
-  DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+  DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
   curl -s -X DELETE \\
-       -H "Authorization: Bearer ${doToken}" \\
-       "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+       -H "Authorization: Bearer \${doToken}" \\
+       "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
   exit 1
 }
 
 # Notify API Server: Run completed, processing results
-curl -s -X POST "$CALLBACK_URL" \\
-     -H "Content-Type: application/json" \\
-     -H "X-Job-Token: $JOB_TOKEN" \\
-     -d '{"status": "running", "stage": "processing_results"}'
+update_job_status "running" "processing_results"
 
 # Compress results (excluding processor directories to save space/bandwidth)
 echo "==> Packaging results..."
@@ -606,20 +650,20 @@ zip -r results.zip 0/ constant/ system/ postProcessing/ simulation.log -x "proce
 
 # Upload results back to S3
 echo "==> Uploading results to S3..."
-aws s3 cp results.zip "s3://$S3_BUCKET/results/$JOB_ID/results.zip"
-aws s3 cp simulation.log "s3://$S3_BUCKET/results/$JOB_ID/simulation.log"
+aws s3 cp results.zip "s3://\$S3_BUCKET/results/\$JOB_ID/results.zip"
+aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log"
 if [ -f postProcessing/forceCoeffs/0/forceCoeffs.dat ]; then
-  aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://$S3_BUCKET/results/$JOB_ID/forceCoeffs.dat"
+  aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://\$S3_BUCKET/results/\$JOB_ID/forceCoeffs.dat"
 fi
 
 # Calculate force coefficients and compile aerodynamic metrics
 METRICS_JSON="{}"
 COEFFS_FILE="postProcessing/forceCoeffs/0/forceCoeffs.dat"
-if [ -f "$COEFFS_FILE" ]; then
-  METRICS_JSON=$(python3 - <<EOF
+if [ -f "\$COEFFS_FILE" ]; then
+  METRICS_JSON=\$(python3 - <<EOF
 import json
 try:
-    with open("$COEFFS_FILE", "r") as f:
+    with open("\$COEFFS_FILE", "r") as f:
         lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
     if lines:
         last_line = lines[-1].split()
@@ -630,7 +674,7 @@ try:
         
         # Extract headers if present
         aref = 1.0
-        with open("$COEFFS_FILE", "r") as f:
+        with open("\$COEFFS_FILE", "r") as f:
             for line in f:
                 if "# Aref" in line:
                     aref = float(line.split()[-1])
@@ -656,17 +700,17 @@ EOF
 fi
 
 # Notify API Server: Finished!
-curl -s -X POST "$CALLBACK_URL" \\
-     -H "Content-Type: application/json" \\
-     -H "X-Job-Token: $JOB_TOKEN" \\
-     -d "{\\"status\\": \\"completed\\", \\"stage\\": \\"completed\\", \\"metrics\\": $METRICS_JSON}"
+update_job_status "completed" "completed" "" "\$METRICS_JSON"
+
+# Terminate log sync background process
+kill \$LOG_SYNC_PID || true
 
 # Hard Self-Destruct to stop billing
 echo "==> Self-destructing droplet..."
-DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
 curl -s -X DELETE \\
-     -H "Authorization: Bearer ${doToken}" \\
-     "https://api.digitalocean.com/v2/droplets/$DROPLET_ID"
+     -H "Authorization: Bearer \${doToken}" \\
+     "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
 `;
 
     // Trigger Droplet Creation
