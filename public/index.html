@@ -55,270 +55,365 @@
 
     <!-- Main Workspace -->
     <main class="workspace">
-      <!-- Left Panel: Upload and File Library -->
+      <!-- Left Column: Workflow Actions -->
       <aside class="sidebar control-panel">
-        <!-- Section 1: Upload Geometry -->
-        <section class="panel-section upload-section">
-          <div class="section-header">
+        <!-- Stage 1 Card: Import Geometry -->
+        <div class="workflow-card active" id="card-stage-1">
+          <div class="workflow-card-header" onclick="switchStage(1)">
             <span class="step-num">01</span>
             <h2>Import Geometry</h2>
+            <span class="accordion-icon"></span>
           </div>
-          <div class="upload-dropzone" id="dropzone">
-            <input type="file" id="file-input" accept=".stl" style="display: none;">
-            <div class="dropzone-content">
-              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-              </svg>
-              <p class="primary-text">Drag & drop F24 CAD geometry</p>
-              <p class="secondary-text">or <span class="browse-link">browse files</span></p>
-              <span class="file-limits">Supports ASCII/Binary .stl (max 500MB)</span>
-            </div>
-            <div class="upload-progress-container" id="upload-progress-bar" style="display: none;">
-              <div class="progress-bar-wrapper">
-                <div class="progress-fill" style="width: 0%"></div>
+          <div class="workflow-card-body">
+            <div class="upload-dropzone" id="dropzone">
+              <input type="file" id="file-input" accept=".stl" style="display: none;">
+              <div class="dropzone-content">
+                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+                <p class="primary-text">Drag & drop F24 CAD geometry</p>
+                <p class="secondary-text">or <span class="browse-link">browse files</span></p>
+                <span class="file-limits">Supports STL (max 500MB)</span>
               </div>
-              <div class="progress-status">
-                <span class="progress-percent">0%</span>
-                <span class="progress-filename">Uploading file...</span>
+              <div class="upload-progress-container" id="upload-progress-bar" style="display: none;">
+                <div class="progress-bar-wrapper">
+                  <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-status">
+                  <span class="progress-percent">0%</span>
+                  <span class="progress-filename">Uploading file...</span>
+                </div>
               </div>
-            </div>
-          </div>
-          <div class="import-options" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
-            <label for="unit-select" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">CAD Model Units:</label>
-            <select id="unit-select" class="select-field" style="width: 55%; font-size: 10px;">
-              <option value="auto" selected>Auto-Detect (m/mm)</option>
-              <option value="mm">Millimeters (mm)</option>
-              <option value="m">Meters (m)</option>
-            </select>
-          </div>
-        </section>
-
-        <!-- Section 2: Library -->
-        <section class="panel-section library-section">
-          <div class="section-header">
-            <h2>Geometry Library</h2>
-            <button class="btn-icon" id="refresh-library-btn" title="Refresh library">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-              </svg>
-            </button>
-          </div>
-          <div class="library-search">
-            <input type="text" id="library-search-input" placeholder="Search models...">
-          </div>
-          <div class="model-list-wrapper">
-            <div class="model-list-empty" id="library-empty" style="display: none;">
-              <p>No geometries imported yet.</p>
-            </div>
-            <ul class="model-list" id="library-list">
-              <!-- Dynamically populated -->
-              <li class="loading-placeholder">Loading geometries...</li>
-            </ul>
-          </div>
-        </section>
-      </aside>
-
-      <!-- Center: 3D Viewport -->
-      <section class="viewport-area">
-        <div class="viewport-header">
-          <div class="model-info">
-            <h3 id="active-model-title">No Geometry Loaded</h3>
-            <span class="model-status-tag" id="active-model-status" style="display: none;">Active</span>
-          </div>
-          
-          <!-- Viewport toolbar -->
-          <div class="viewport-toolbar">
-            <!-- Shading Mode Group -->
-            <div class="control-group-label">Shading</div>
-            <div class="control-group">
-              <button class="btn-toggle active" data-render-mode="shaded" title="Shaded Solid">Solid</button>
-              <button class="btn-toggle" data-render-mode="wireframe" title="Wireframe Mesh">Wire</button>
-              <button class="btn-toggle" data-render-mode="points" title="Point Cloud">Points</button>
             </div>
             
-            <div class="toolbar-divider"></div>
-            
-            <!-- View Angle Group -->
-            <div class="control-group-label">Camera</div>
-            <div class="control-group">
-              <button class="btn-action" data-view="iso">ISO</button>
-              <button class="btn-action" data-view="top">TOP</button>
-              <button class="btn-action" data-view="front">FRONT</button>
-              <button class="btn-action" data-view="side">SIDE</button>
+            <div class="import-options" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+              <label for="unit-select" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Model Units:</label>
+              <select id="unit-select" class="select-field" style="width: 55%; font-size: 10px;">
+                <option value="mm">Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="m">Meters (m)</option>
+                <option value="in">Inches (in)</option>
+              </select>
             </div>
 
-            <div class="toolbar-divider"></div>
-
-            <!-- Helper Group -->
-            <div class="control-group">
-              <button class="btn-toggle-icon active" id="toggle-grid" title="Toggle Ground Grid">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                  <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"/>
+            <div class="library-search" style="margin-top: 15px; display: flex; gap: 8px;">
+              <input type="text" id="library-search-input" placeholder="Search library..." class="select-field" style="flex: 1; font-size: 11px;">
+              <button class="btn-icon" id="refresh-library-btn" title="Refresh library" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; cursor: pointer; color: var(--text-secondary);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                 </svg>
               </button>
-              <button class="btn-toggle-icon active" id="toggle-axes" title="Toggle Coordinate Axes (X:Red, Y:Green, Z:Blue)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                  <path d="M12 2v20M2 12h20M12 2l4 4M12 2l-4 4"/>
-                </svg>
-              </button>
+            </div>
+            <div class="model-list-wrapper" style="margin-top: 10px; max-height: 180px; overflow-y: auto;">
+              <div class="model-list-empty" id="library-empty" style="display: none; padding: 15px; text-align: center; color: var(--text-secondary); font-size: 11px;">No STL files found.</div>
+              <ul class="model-list" id="library-list" style="list-style: none; padding: 0; margin: 0;">
+                <li class="loading-placeholder" style="padding: 10px; color: var(--text-secondary); font-size: 11px; text-align: center;">Loading geometries...</li>
+              </ul>
             </div>
           </div>
         </div>
 
-        <!-- 3D Canvas Container -->
-        <div class="viewport-canvas-container" id="viewport-container">
-          <div class="viewport-overlay-alert" id="viewport-placeholder">
-            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-            </svg>
-            <p>Upload or select an STL file to render the 3D geometry</p>
-          </div>
-          <!-- Three.js Canvas will be injected here -->
-          
-          <!-- Dimensions Helper Labels -->
-          <div class="dimension-labels-container" id="dimension-labels" style="display: none;">
-            <div class="dim-label length-label">L: <span id="dim-len">-</span> mm</div>
-            <div class="dim-label width-label">W: <span id="dim-wid">-</span> mm</div>
-            <div class="dim-label height-label">H: <span id="dim-hei">-</span> mm</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Right Panel: Geometry Stats and Regulations Verification -->
-      <aside class="sidebar stats-panel">
-        <section class="panel-section stats-section">
-          <div class="section-header">
+        <!-- Stage 2 Card: Geometry Analysis -->
+        <div class="workflow-card disabled" id="card-stage-2">
+          <div class="workflow-card-header" onclick="switchStage(2)">
             <span class="step-num">02</span>
             <h2>Geometry Analysis</h2>
+            <span class="accordion-icon"></span>
           </div>
-          
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span class="stat-label">Total Triangles</span>
-              <span class="stat-val" id="stat-triangles">-</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Total Vertices</span>
-              <span class="stat-val" id="stat-vertices">-</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Bounding Box Volume</span>
-              <span class="stat-val" id="stat-volume">-</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Model Surface Area</span>
-              <span class="stat-val" id="stat-surface-area">-</span>
-            </div>
-          </div>
-
-          <div class="frontal-area-box">
-            <h3>Aerodynamic Frontal Area</h3>
-            <p class="area-note">Calculated projected area along flow direction (Y-Z plane)</p>
-            <div class="area-result">
-              <span class="value" id="stat-frontal-area">-</span> <span class="unit">m²</span>
-            </div>
-            <div class="drag-calc-row" style="margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div class="workflow-card-body">
+            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+              Review model dimensions and verify regulations checklist on the right.
+            </p>
+            <div class="drag-calc-row" style="background: rgba(0, 0, 0, 0.2); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03); display: flex; justify-content: space-between; align-items: center;">
               <label for="cd-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Assumed C<sub>d</sub>:</label>
               <input type="number" id="cd-input" value="0.30" step="0.01" min="0.05" max="1.50" class="select-field" style="width: 45%; text-align: center; font-family: var(--font-mono); font-size: 11px;">
             </div>
-            <div class="drag-result" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px;">
-              <span style="color: var(--text-secondary); font-weight: 500;">CdA (Drag Area):</span>
-              <span id="stat-cda" style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 700; font-size: 13px; text-shadow: 0 0 6px var(--accent-cyan-glow);">-</span>
-            </div>
           </div>
-        </section>
+        </div>
 
-        <!-- F24 Regulations Section -->
-        <section class="panel-section reg-section">
-          <div class="section-header">
-            <h2>F24 Regulations Checklist</h2>
-          </div>
-          <div class="reg-intro-text">
-            Validating against Greenpower F24 / F24+ design rules.
-          </div>
-          
-          <div class="reg-checklist">
-            <div class="reg-item" id="reg-len">
-              <div class="reg-indicator"></div>
-              <div class="reg-details">
-                <span class="name">Max Total Length (&le; 2400mm)</span>
-                <span class="value" id="reg-len-val">-</span>
-              </div>
-            </div>
-            
-            <div class="reg-item" id="reg-wid">
-              <div class="reg-indicator"></div>
-              <div class="reg-details">
-                <span class="name">Max Total Width (&le; 900mm)</span>
-                <span class="value" id="reg-wid-val">-</span>
-              </div>
-            </div>
-
-            <div class="reg-item" id="reg-hei">
-              <div class="reg-indicator"></div>
-              <div class="reg-details">
-                <span class="name">Max Height limit (CFD context)</span>
-                <span class="value" id="reg-hei-val">-</span>
-              </div>
-            </div>
-
-            <div class="reg-item" id="reg-watertight">
-              <div class="reg-indicator"></div>
-              <div class="reg-details">
-                <span class="name">Mesh Solvability (Watertight)</span>
-                <span class="value" id="reg-watertight-val">Not Checked</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="reg-summary-box" id="reg-summary">
-            No geometry loaded
-          </div>
-        </section>
-
-        <!-- CFD Simulation Section -->
-        <section class="panel-section cfd-section">
-          <div class="section-header">
+        <!-- Stage 3 Card: CFD Aero Simulation -->
+        <div class="workflow-card disabled" id="card-stage-3">
+          <div class="workflow-card-header" onclick="switchStage(3)">
             <span class="step-num">03</span>
             <h2>CFD Aero Simulation</h2>
+            <span class="accordion-icon"></span>
           </div>
-          
-          <div class="cfd-controls">
-            <button class="btn-primary" id="btn-run-cfd" disabled style="width: 100%; justify-content: center; display: flex; align-items: center;">
+          <div class="workflow-card-body">
+            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+              Run a steady-state 3D OpenFOAM simulation of the design at race speed (13.4 m/s).
+            </p>
+            <button class="btn-primary" id="btn-run-cfd" disabled style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
                 <path d="M5 3l14 9-14 9V3z"/>
               </svg>
               Run CFD Simulation
             </button>
           </div>
+        </div>
 
-          <!-- Active Simulation Monitor (hidden by default) -->
-          <div class="cfd-monitor" id="cfd-monitor" style="display: none; margin-top: 15px;">
-            <div class="monitor-status-row" style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="monitor-status-label" style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Status:</span>
-              <span class="status-badge running" id="cfd-status-badge" style="font-size: 11px; font-weight: 600; background: rgba(0, 240, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 2px 8px; border-radius: 12px;">Initializing</span>
+        <!-- Stage 4 Card: Analyse Results -->
+        <div class="workflow-card disabled" id="card-stage-4">
+          <div class="workflow-card-header" onclick="switchStage(4)">
+            <span class="step-num">04</span>
+            <h2>Analyse Results</h2>
+            <span class="accordion-icon"></span>
+          </div>
+          <div class="workflow-card-body">
+            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+              Aerodynamic metrics and forces are ready. Review performance charts and download raw case files.
+            </p>
+            <div class="cfd-actions" style="display: flex; gap: 8px; flex-direction: column;">
+              <a href="#" id="lnk-download-results" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;" target="_blank">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                Download ZIP
+              </a>
+              <button class="btn-secondary" id="btn-clear-cfd" style="width: 100%; justify-content: center; display: flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Clear Run</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Column: Viewport and Charts -->
+      <section class="viewport-area">
+        <!-- 3D CAD Viewport Container (visible by default) -->
+        <div id="cad-viewport-container" style="display: flex; flex-direction: column; height: 100%; width: 100%;">
+          <div class="viewport-header">
+            <div class="model-info">
+              <h3 id="active-model-title">No Geometry Loaded</h3>
+              <span class="model-status-tag" id="active-model-status" style="display: none;">Active</span>
             </div>
             
-            <div class="progress-bar-wrapper" style="margin-top: 8px; background: rgba(255, 255, 255, 0.05); height: 6px; border-radius: 3px; overflow: hidden;">
-              <div class="progress-fill" id="cfd-progress-fill" style="width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple)); height: 100%; transition: width 0.3s ease;"></div>
-            </div>
-            
-            <!-- Terminal Console for Logs -->
-            <div class="terminal-console-header" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-              <span>Execution Log</span>
-              <button class="btn-secondary" id="btn-toggle-console" style="padding: 2px 6px; height: auto; font-size: 9px; line-height: 1.2; border-radius: 4px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text-secondary);">Collapse</button>
-            </div>
-            <div class="terminal-console" id="cfd-console" style="margin-top: 6px; height: 120px; background: #020408; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 10px; overflow-y: auto; font-family: var(--font-mono); font-size: 10px; line-height: 1.4; color: #a5b4fc; white-space: pre-wrap;">
-              <div class="console-line system" style="color: var(--text-secondary);">Waiting for droplet boot...</div>
+            <div class="viewport-toolbar">
+              <div class="control-group-label">Shading</div>
+              <div class="control-group">
+                <button class="btn-toggle active" data-render-mode="shaded" title="Shaded Solid">Solid</button>
+                <button class="btn-toggle" data-render-mode="wireframe" title="Wireframe Mesh">Wire</button>
+                <button class="btn-toggle" data-render-mode="points" title="Point Cloud">Points</button>
+              </div>
+              
+              <div class="toolbar-divider"></div>
+              
+              <div class="control-group-label">Camera</div>
+              <div class="control-group">
+                <button class="btn-action" data-view="iso">ISO</button>
+                <button class="btn-action" data-view="top">TOP</button>
+                <button class="btn-action" data-view="front">FRONT</button>
+                <button class="btn-action" data-view="side">SIDE</button>
+              </div>
+
+              <div class="toolbar-divider"></div>
+
+              <div class="control-group">
+                <button class="btn-toggle-icon active" id="toggle-grid" title="Toggle Ground Grid">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"/>
+                  </svg>
+                </button>
+                <button class="btn-toggle-icon active" id="toggle-axes" title="Toggle Coordinate Axes (X:Red, Y:Green, Z:Blue)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <path d="M12 2v20M2 12h20M12 2l4 4M12 2l-4 4"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
-          <!-- Simulation Results Panel (hidden by default) -->
-          <div class="cfd-results" id="cfd-results" style="display: none; margin-top: 15px;">
-            <div class="results-divider" style="height: 1px; background: rgba(255,255,255,0.06); margin-bottom: 12px;"></div>
-            <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Aerodynamic Results</h3>
+          <div class="viewport-canvas-container" id="viewport-container">
+            <div class="viewport-overlay-alert" id="viewport-placeholder">
+              <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+              </svg>
+              <p>Upload or select an STL file to render the 3D geometry</p>
+            </div>
             
-            <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+            <div class="dimension-labels-container" id="dimension-labels" style="display: none;">
+              <div class="dim-label length-label">L: <span id="dim-len">-</span> mm</div>
+              <div class="dim-label width-label">W: <span id="dim-wid">-</span> mm</div>
+              <div class="dim-label height-label">H: <span id="dim-hei">-</span> mm</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Graphical Results Panel (hidden by default) -->
+        <div id="graphical-results-panel" class="graphical-results-container" style="display: none; flex-direction: column; height: 100%; width: 100%; padding: 20px; overflow-y: auto;">
+          <div class="results-panel-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 12px;">
+            <svg class="results-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; color: var(--accent-cyan);">
+              <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
+            </svg>
+            <h2 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">Aerodynamic Performance Curves</h2>
+          </div>
+          <div class="charts-grid" style="display: grid; grid-template-columns: 1fr; gap: 20px; flex: 1;">
+            <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; min-height: 250px;">
+              <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Aerodynamic Forces vs. Speed</h3>
+              <p class="chart-desc" style="font-size: 10px; color: var(--text-secondary); margin: 0 0 15px 0;">Drag Force (Cyan) & Lift Force (Purple) curves across race velocities ($F \propto v^2$)</p>
+              <div id="forces-chart-svg" class="chart-svg-wrapper" style="flex: 1; min-height: 180px; position: relative;"></div>
+            </div>
+            <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; min-height: 250px;">
+              <h3 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Aerodynamic Power Demand</h3>
+              <p class="chart-desc" style="font-size: 10px; color: var(--text-secondary); margin: 0 0 15px 0;">Battery power output required to overcome drag force ($P \propto v^3$)</p>
+              <div id="power-chart-svg" class="chart-svg-wrapper" style="flex: 1; min-height: 180px; position: relative;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Dynamic Stage Data Panels -->
+      <aside class="sidebar stats-panel">
+        <!-- Stage 1 Data: Import Details -->
+        <div class="stage-data-panel active" id="data-stage-1" style="height: 100%; display: flex; flex-direction: column;">
+          <div class="panel-section" style="border-bottom: none; display: flex; flex-direction: column; flex: 1;">
+            <div class="section-header">
+              <h2>Active Model Details</h2>
+            </div>
+            <div class="stage-data-content" id="import-details-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
+                <path d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+              </svg>
+              <p style="font-size: 11px; line-height: 1.5; margin: 0;">No CAD geometry active.<br>Import a new file or select a model from the library on the left.</p>
+            </div>
+            <div class="stage-data-content" id="import-details-loaded" style="display: none; padding: 10px 0;">
+              <div class="details-list" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="detail-row" style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                  <span class="detail-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">File Name</span>
+                  <span class="detail-val" id="meta-filename" style="font-size: 13px; font-weight: 700; color: var(--text-primary); word-break: break-all;">-</span>
+                </div>
+                <div class="detail-row" style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                  <span class="detail-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Status</span>
+                  <span class="detail-val" style="font-size: 12px; font-weight: 600; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 6px;">
+                    <span class="status-indicator online" style="width: 8px; height: 8px; display: inline-block; filter: drop-shadow(0 0 3px var(--accent-cyan));"></span>
+                    Loaded & Ready
+                  </span>
+                </div>
+                <div class="detail-row" style="display: flex; flex-direction: column; gap: 4px;">
+                  <span class="detail-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Next Action</span>
+                  <p style="font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0;">Click on card **02 Geometry Analysis** on the left to review metrics and check regulations compliance.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage 2 Data: Bounding Box and Regulations Checklist -->
+        <div class="stage-data-panel" id="data-stage-2" style="display: none; height: 100%; overflow-y: auto;">
+          <section class="panel-section stats-section">
+            <div class="section-header">
+              <h2>Geometry Analysis</h2>
+            </div>
+            
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-label">Total Triangles</span>
+                <span class="stat-val" id="stat-triangles">-</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Total Vertices</span>
+                <span class="stat-val" id="stat-vertices">-</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Bounding Box Volume</span>
+                <span class="stat-val" id="stat-volume">-</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Model Surface Area</span>
+                <span class="stat-val" id="stat-surface-area">-</span>
+              </div>
+            </div>
+
+            <div class="frontal-area-box" style="margin-top: 15px; background: rgba(0, 240, 255, 0.02); border: 1px solid rgba(0, 240, 255, 0.08); border-radius: 8px; padding: 12px;">
+              <h3 style="font-size: 11px; color: var(--accent-cyan); text-transform: uppercase; margin: 0 0 4px 0; letter-spacing: 0.5px;">Aerodynamic Frontal Area</h3>
+              <p class="area-note" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 8px 0;">Calculated projected area along flow direction (Y-Z plane)</p>
+              <div class="area-result" style="display: flex; align-items: baseline; gap: 4px;">
+                <span class="value" id="stat-frontal-area" style="font-size: 22px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono);">-</span>
+                <span class="unit" style="font-size: 12px; color: var(--text-secondary);">m²</span>
+              </div>
+              <div class="drag-result" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 8px;">
+                <span style="color: var(--text-secondary); font-weight: 500;">CdA (Drag Area):</span>
+                <span id="stat-cda" style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 700; font-size: 13px; text-shadow: 0 0 6px var(--accent-cyan-glow);">-</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-section reg-section">
+            <div class="section-header">
+              <h2>F24 Regulations Checklist</h2>
+            </div>
+            <div class="reg-checklist">
+              <div class="reg-item" id="reg-len">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Max Total Length (&le; 2400mm)</span>
+                  <span class="value" id="reg-len-val">-</span>
+                </div>
+              </div>
+              
+              <div class="reg-item" id="reg-wid">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Max Total Width (&le; 900mm)</span>
+                  <span class="value" id="reg-wid-val">-</span>
+                </div>
+              </div>
+
+              <div class="reg-item" id="reg-hei">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Max Height limit (CFD context)</span>
+                  <span class="value" id="reg-hei-val">-</span>
+                </div>
+              </div>
+
+              <div class="reg-item" id="reg-watertight">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Mesh Solvability (Watertight)</span>
+                  <span class="value" id="reg-watertight-val">Not Checked</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="reg-summary-box" id="reg-summary" style="margin-top: 12px; font-size: 10px; padding: 10px; border-radius: 6px; text-align: center; font-weight: 500;">
+              No geometry loaded
+            </div>
+          </section>
+        </div>
+
+        <!-- Stage 3 Data: CFD Progress & Logs -->
+        <div class="stage-data-panel" id="data-stage-3" style="display: none; height: 100%;">
+          <section class="panel-section" style="height: 100%; display: flex; flex-direction: column; border-bottom: none;">
+            <div class="section-header">
+              <h2>Simulation Logs & Progress</h2>
+            </div>
+            
+            <div class="cfd-monitor" id="cfd-monitor" style="display: flex; flex-direction: column; flex: 1;">
+              <div class="monitor-status-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
+                <span class="monitor-status-label" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase;">Status:</span>
+                <span class="status-badge running" id="cfd-status-badge" style="font-size: 11px; font-weight: 600; background: rgba(0, 240, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 2px 8px; border-radius: 12px;">Initializing</span>
+              </div>
+              
+              <div class="progress-bar-wrapper" style="margin-top: 12px; background: rgba(255, 255, 255, 0.05); height: 6px; border-radius: 3px; overflow: hidden;">
+                <div class="progress-fill" id="cfd-progress-fill" style="width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple)); height: 100%; transition: width 0.3s ease;"></div>
+              </div>
+
+              <div class="terminal-console-header" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                <span>Execution Log</span>
+              </div>
+              <div class="terminal-console" id="cfd-console" style="margin-top: 8px; flex: 1; min-height: 250px; background: #020408; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 12px; overflow-y: auto; font-family: var(--font-mono); font-size: 10px; line-height: 1.4; color: #a5b4fc; white-space: pre-wrap;">
+                <div class="console-line system" style="color: var(--text-secondary);">Waiting for simulation to start...</div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Stage 4 Data: CFD Results Summary -->
+        <div class="stage-data-panel" id="data-stage-4" style="display: none; height: 100%; overflow-y: auto;">
+          <section class="panel-section results-summary-section" style="border-bottom: none;">
+            <div class="section-header">
+              <h2>Aerodynamic Summary</h2>
+            </div>
+            
+            <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
               <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
                 <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Drag Coeff (Cd)</span>
                 <span class="stat-val" id="cfd-cd" style="font-size: 15px; font-weight: 700; color: var(--accent-cyan); font-family: var(--font-mono);">-</span>
@@ -337,13 +432,12 @@
               </div>
             </div>
 
-            <!-- Forces at Speed -->
-            <div class="forces-table" style="background: rgba(0, 0, 0, 0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
-              <div class="force-row" style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <div class="forces-table" style="background: rgba(0, 0, 0, 0.2); padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+              <div class="force-row" style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
                 <span class="label" style="font-size: 11px; color: var(--text-secondary);">Drag Force (at 13.4 m/s):</span>
                 <span class="val" id="cfd-drag-force" style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-primary);">-</span>
               </div>
-              <div class="force-row" style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <div class="force-row" style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
                 <span class="label" style="font-size: 11px; color: var(--text-secondary);">Lift Force (at 13.4 m/s):</span>
                 <span class="val" id="cfd-lift-force" style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-primary);">-</span>
               </div>
@@ -352,18 +446,8 @@
                 <span class="val" id="cfd-power" style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-cyan);">-</span>
               </div>
             </div>
-
-            <div class="cfd-actions" style="margin-top: 15px; display: flex; gap: 8px;">
-              <a href="#" id="lnk-download-results" class="btn-secondary" style="flex: 1; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;" target="_blank">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                </svg>
-                Download ZIP
-              </a>
-              <button class="btn-secondary" id="btn-clear-cfd" style="flex: 1; justify-content: center; display: flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Clear Run</button>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </aside>
     </main>
   </div>

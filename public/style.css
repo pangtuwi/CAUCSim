@@ -1096,3 +1096,270 @@ body {
   }
 }
 
+/* Workflow Accordion Cards */
+.workflow-card {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+}
+
+.workflow-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background-color 0.3s ease;
+}
+
+.workflow-card.active::after {
+  background: var(--accent-cyan);
+}
+
+.workflow-card.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.workflow-card-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.workflow-card-header:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.workflow-card-header h2 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+  letter-spacing: 0.5px;
+}
+
+.workflow-card-header .step-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  margin-right: 12px;
+  transition: all 0.3s ease;
+}
+
+.workflow-card.active .workflow-card-header .step-num {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.2);
+}
+
+.workflow-card-header .accordion-icon {
+  width: 16px;
+  height: 16px;
+  position: relative;
+}
+
+.workflow-card-header .accordion-icon::before,
+.workflow-card-header .accordion-icon::after {
+  content: '';
+  background-color: var(--text-secondary);
+  position: absolute;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Accordion horizontal line */
+.workflow-card-header .accordion-icon::before {
+  width: 10px;
+  height: 2px;
+  top: 7px;
+  left: 3px;
+}
+
+/* Accordion vertical line */
+.workflow-card-header .accordion-icon::after {
+  width: 2px;
+  height: 10px;
+  top: 3px;
+  left: 7px;
+}
+
+/* Transform to minus when active */
+.workflow-card.active .workflow-card-header .accordion-icon::after {
+  transform: rotate(90deg);
+  opacity: 0;
+}
+
+.workflow-card-body {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 20px;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease,
+              padding 0.3s ease;
+}
+
+.workflow-card.active .workflow-card-body {
+  max-height: 500px;
+  opacity: 1;
+  padding: 15px 20px 20px 20px;
+}
+
+/* Stage-Specific Data Displays (Right Column) */
+.stage-data-panel {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  animation: dataPanelFadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stage-data-panel.active {
+  display: flex;
+}
+
+@keyframes dataPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Center Column Graphical Results Styling */
+.graphical-results-container {
+  background: var(--bg-secondary);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-sizing: border-box;
+  animation: viewportFadeIn 0.4s ease;
+}
+
+.chart-svg-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.chart-svg-wrapper svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Aerodynamic Charts SVG Styling */
+.chart-axis-line {
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 1.5;
+}
+
+.chart-grid-line {
+  stroke: rgba(255, 255, 255, 0.04);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.chart-label-text {
+  fill: var(--text-secondary);
+  font-size: 9px;
+  font-family: var(--font-mono);
+}
+
+.chart-title-text {
+  fill: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.chart-line-drag {
+  stroke: var(--accent-cyan);
+  stroke-width: 2.5;
+  fill: none;
+  filter: drop-shadow(0 0 4px var(--accent-cyan-glow));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 0.3s ease;
+}
+
+.chart-line-lift {
+  stroke: var(--accent-purple);
+  stroke-width: 2.5;
+  fill: none;
+  filter: drop-shadow(0 0 4px rgba(188, 19, 254, 0.4));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 0.3s ease;
+}
+
+.chart-line-power {
+  stroke: #ff9d00;
+  stroke-width: 2.5;
+  fill: none;
+  filter: drop-shadow(0 0 4px rgba(255, 157, 0, 0.4));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 0.3s ease;
+}
+
+.chart-area-drag {
+  fill: url(#drag-gradient);
+  opacity: 0.08;
+}
+
+.chart-area-lift {
+  fill: url(#lift-gradient);
+  opacity: 0.06;
+}
+
+.chart-area-power {
+  fill: url(#power-gradient);
+  opacity: 0.06;
+}
+
+.chart-marker {
+  stroke-width: 2;
+  cursor: pointer;
+  transition: r 0.2s ease, stroke-width 0.2s ease;
+}
+
+.chart-marker:hover {
+  r: 6;
+  stroke-width: 3;
+}
+
+.chart-marker-drag {
+  fill: #020408;
+  stroke: var(--accent-cyan);
+}
+
+.chart-marker-lift {
+  fill: #020408;
+  stroke: var(--accent-purple);
+}
+
+.chart-marker-power {
+  fill: #020408;
+  stroke: #ff9d00;
+}
+
+

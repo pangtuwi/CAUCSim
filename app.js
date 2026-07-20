@@ -797,6 +797,44 @@ app.get('/api/jobs/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Job not found' });
   }
   
+  // Check if the job is orphaned
+  let stateChanged = false;
+  if (jobState.status === 'queued' || jobState.status === 'running') {
+    if (jobState.dropletId) {
+      const doToken = process.env.DIGITALOCEAN_TOKEN;
+      if (doToken) {
+        try {
+          const doRes = await fetch(`https://api.digitalocean.com/v2/droplets/${jobState.dropletId}`, {
+            headers: { 'Authorization': `Bearer ${doToken}` }
+          });
+          if (doRes.status === 404) {
+            jobState.status = 'failed';
+            jobState.error = 'DigitalOcean droplet was destroyed or is no longer active.';
+            jobState.completedAt = new Date().toISOString();
+            jobState.updatedAt = new Date().toISOString();
+            stateChanged = true;
+          }
+        } catch (err) {
+          console.error(`Error verifying droplet ${jobState.dropletId} status:`, err);
+        }
+      }
+    } else {
+      // Simulated/Mock job or failed launch (no dropletId)
+      const timeSinceUpdate = Date.now() - new Date(jobState.updatedAt).getTime();
+      if (timeSinceUpdate > 60000) { // 1 minute timeout for local/failed queued jobs
+        jobState.status = 'failed';
+        jobState.error = 'Simulation job was interrupted or failed to start.';
+        jobState.completedAt = new Date().toISOString();
+        jobState.updatedAt = new Date().toISOString();
+        stateChanged = true;
+      }
+    }
+  }
+
+  if (stateChanged) {
+    await saveJobState(jobId, jobState);
+  }
+
   const clientState = { ...jobState };
   delete clientState.jobToken;
   res.json(clientState);

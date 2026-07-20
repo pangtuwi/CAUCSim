@@ -14,6 +14,8 @@ let activeFilename = null;
 let activeUrl = null;
 let activeFileKey = null;
 let currentFrontalArea = 0;
+let activeStage = 1;
+let unlockedStages = new Set([1]);
 
 // Authentication State
 let idToken = localStorage.getItem('caucsim_id_token') || null;
@@ -40,6 +42,8 @@ const libraryEmpty = document.getElementById('library-empty');
 const searchInput = document.getElementById('library-search-input');
 const refreshBtn = document.getElementById('refresh-library-btn');
 const cdInput = document.getElementById('cd-input');
+const cadViewportContainer = document.getElementById('cad-viewport-container');
+const graphicalResultsPanel = document.getElementById('graphical-results-panel');
 
 // Auth Elements
 const authModal = document.getElementById('auth-modal');
@@ -77,6 +81,323 @@ const regSummary = document.getElementById('reg-summary');
 // Show login modal immediately if no token exists to prevent dashboard flashing
 if (!idToken) {
   authModal.style.display = 'flex';
+}
+
+// --- Stage Management & Accordion Cards ---
+function switchStage(stageNum) {
+  if (!unlockedStages.has(stageNum)) {
+    console.warn(`Stage ${stageNum} is currently locked.`);
+    return;
+  }
+  
+  activeStage = stageNum;
+  
+  // 1. Update left accordion cards styling
+  for (let i = 1; i <= 4; i++) {
+    const cardEl = document.getElementById(`card-stage-${i}`);
+    if (cardEl) {
+      if (i === activeStage) {
+        cardEl.classList.add('active');
+      } else {
+        cardEl.classList.remove('active');
+      }
+      
+      // Update disabled state based on unlock status
+      if (unlockedStages.has(i)) {
+        cardEl.classList.remove('disabled');
+      } else {
+        cardEl.classList.add('disabled');
+      }
+    }
+  }
+  
+  // 2. Update right-side stage data panels visibility
+  for (let i = 1; i <= 4; i++) {
+    const panelEl = document.getElementById(`data-stage-${i}`);
+    if (panelEl) {
+      if (i === activeStage) {
+        panelEl.style.display = 'flex';
+        panelEl.classList.add('active');
+      } else {
+        panelEl.style.display = 'none';
+        panelEl.classList.remove('active');
+      }
+    }
+  }
+  
+  // 3. Update middle column visibility (CAD Viewport vs Charts)
+  if (cadViewportContainer && graphicalResultsPanel) {
+    if (activeStage === 4) {
+      cadViewportContainer.style.display = 'none';
+      graphicalResultsPanel.style.display = 'flex';
+      renderPerformanceCharts();
+    } else {
+      cadViewportContainer.style.display = 'flex';
+      graphicalResultsPanel.style.display = 'none';
+      // Trigger canvas resize to ensure Three.js adapts correctly
+      if (renderer && camera) {
+        onWindowResize();
+      }
+    }
+  }
+}
+window.switchStage = switchStage;
+
+function unlockStage(stageNum) {
+  unlockedStages.add(stageNum);
+  const cardEl = document.getElementById(`card-stage-${stageNum}`);
+  if (cardEl) {
+    cardEl.classList.remove('disabled');
+  }
+}
+window.unlockStage = unlockStage;
+
+function lockStage(stageNum) {
+  unlockedStages.delete(stageNum);
+  const cardEl = document.getElementById(`card-stage-${stageNum}`);
+  if (cardEl) {
+    cardEl.classList.add('disabled');
+  }
+}
+window.lockStage = lockStage;
+
+// --- SVG Performance Charts Rendering ---
+function renderPerformanceCharts() {
+  const cdaVal = parseFloat(document.getElementById('cfd-cda').textContent) || 0.048;
+  const claVal = parseFloat(document.getElementById('cfd-cla').textContent) || -0.019;
+  
+  const forcesWrapper = document.getElementById('forces-chart-svg');
+  const powerWrapper = document.getElementById('power-chart-svg');
+  
+  if (!forcesWrapper || !powerWrapper) return;
+  
+  const w = forcesWrapper.clientWidth || 500;
+  const h = forcesWrapper.clientHeight || 200;
+  
+  const padding = { left: 45, right: 15, top: 15, bottom: 30 };
+  const graphW = w - padding.left - padding.right;
+  const graphH = h - padding.top - padding.bottom;
+  
+  const density = 1.225; // kg/m³
+  const speeds = Array.from({ length: 11 }, (_, i) => i * 2); // 0, 2, 4, ..., 20 m/s
+  
+  // 1. Forces Chart (Drag & Lift)
+  const dragForces = speeds.map(v => 0.5 * density * v * v * cdaVal);
+  const liftForces = speeds.map(v => 0.5 * density * v * v * claVal);
+  
+  const maxF = Math.max(...dragForces.map(Math.abs), ...liftForces.map(Math.abs), 5);
+  const yMaxF = Math.ceil(maxF / 5) * 5;
+  
+  const mapForceCoords = (v, f) => {
+    const x = padding.left + (v / 20) * graphW;
+    const y = padding.top + (1 - (f - (-yMaxF)) / (2 * yMaxF)) * graphH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  };
+  
+  const dragPoints = speeds.map(v => mapForceCoords(v, 0.5 * density * v * v * cdaVal)).join(' ');
+  const liftPoints = speeds.map(v => mapForceCoords(v, 0.5 * density * v * v * claVal)).join(' ');
+  
+  const raceDragY = 0.5 * density * 13.4 * 13.4 * cdaVal;
+  const raceLiftY = 0.5 * density * 13.4 * 13.4 * claVal;
+  const raceDragCoord = mapForceCoords(13.4, raceDragY);
+  const raceLiftCoord = mapForceCoords(13.4, raceLiftY);
+  
+  const xRace = padding.left + (13.4 / 20) * graphW;
+  
+  forcesWrapper.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}">
+      <defs>
+        <linearGradient id="drag-gradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent-cyan)" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="var(--accent-cyan)" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="lift-gradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent-purple)" stop-opacity="0.15"/>
+          <stop offset="100%" stop-color="var(--accent-purple)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      
+      <!-- Grid lines -->
+      ${[ -yMaxF, -yMaxF / 2, 0, yMaxF / 2, yMaxF ].map(f => {
+        const y = padding.top + (1 - (f - (-yMaxF)) / (2 * yMaxF)) * graphH;
+        return `
+          <line x1="${padding.left}" y1="${y}" x2="${w - padding.right}" y2="${y}" class="chart-grid-line" />
+          <text x="${padding.left - 8}" y="${y + 3}" class="chart-label-text" text-anchor="end">${f.toFixed(1)}</text>
+        `;
+      }).join('')}
+      
+      ${[ 0, 5, 10, 15, 20 ].map(v => {
+        const x = padding.left + (v / 20) * graphW;
+        return `
+          <line x1="${x}" y1="${padding.top}" x2="${x}" y2="${h - padding.bottom}" class="chart-grid-line" />
+          <text x="${x}" y="${h - padding.bottom + 14}" class="chart-label-text" text-anchor="middle">${v}</text>
+        `;
+      }).join('')}
+      
+      <!-- Zero baseline -->
+      <line x1="${padding.left}" y1="${padding.top + 0.5 * graphH}" x2="${w - padding.right}" y2="${padding.top + 0.5 * graphH}" class="chart-axis-line" stroke-dasharray="2 2" />
+      
+      <!-- Grid Border Axis -->
+      <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${h - padding.bottom}" class="chart-axis-line" />
+      <line x1="${padding.left}" y1="${h - padding.bottom}" x2="${w - padding.right}" y2="${h - padding.bottom}" class="chart-axis-line" />
+      
+      <!-- Area curves -->
+      <path d="M${padding.left},${padding.top + 0.5 * graphH} L${dragPoints} L${w - padding.right},${padding.top + 0.5 * graphH} Z" class="chart-area-drag" />
+      
+      <!-- Lines -->
+      <path d="M${dragPoints}" class="chart-line-drag" />
+      <path d="M${liftPoints}" class="chart-line-lift" />
+      
+      <!-- Race Speed Vertical line indicator -->
+      <line x1="${xRace}" y1="${padding.top}" x2="${xRace}" y2="${h - padding.bottom}" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="2 2" />
+      
+      <!-- Interactive Points at Race Speed -->
+      <circle cx="${xRace}" cy="${raceDragCoord.split(',')[1]}" r="4.5" class="chart-marker chart-marker-drag" />
+      <circle cx="${xRace}" cy="${raceLiftCoord.split(',')[1]}" r="4.5" class="chart-marker chart-marker-lift" />
+      
+      <!-- Legend -->
+      <g transform="translate(${padding.left + 15}, ${padding.top + 10})">
+        <rect x="0" y="0" width="8" height="8" fill="var(--accent-cyan)" rx="2"/>
+        <text x="12" y="8" class="chart-label-text" style="fill:var(--text-primary);">Drag Force (N)</text>
+        
+        <rect x="110" y="0" width="8" height="8" fill="var(--accent-purple)" rx="2"/>
+        <text x="122" y="8" class="chart-label-text" style="fill:var(--text-primary);">Lift Force (N)</text>
+      </g>
+      
+      <!-- X Axis Label -->
+      <text x="${padding.left + graphW / 2}" y="${h - 5}" class="chart-label-text" text-anchor="middle" style="font-size: 8.5px; fill: var(--text-secondary);">Velocity (m/s)</text>
+    </svg>
+  `;
+  
+  // 2. Power Chart (Power Required)
+  const powerValues = speeds.map(v => {
+    const dragF = 0.5 * density * v * v * cdaVal;
+    return dragF * v;
+  });
+  
+  const maxP = Math.max(...powerValues, 50);
+  const yMaxP = Math.ceil(maxP / 50) * 50;
+  
+  const mapPowerCoords = (v, p) => {
+    const x = padding.left + (v / 20) * graphW;
+    const y = padding.top + (1 - p / yMaxP) * graphH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  };
+  
+  const powerPoints = speeds.map(v => {
+    const dragF = 0.5 * density * v * v * cdaVal;
+    return mapPowerCoords(v, dragF * v);
+  }).join(' ');
+  
+  const racePowerY = raceDragY * 13.4;
+  const racePowerCoord = mapPowerCoords(13.4, racePowerY);
+  
+  powerWrapper.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}">
+      <defs>
+        <linearGradient id="power-gradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ff9d00" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="#ff9d00" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      
+      <!-- Grid lines -->
+      ${[ 0, yMaxP / 4, yMaxP / 2, (3 * yMaxP) / 4, yMaxP ].map(p => {
+        const y = padding.top + (1 - p / yMaxP) * graphH;
+        return `
+          <line x1="${padding.left}" y1="${y}" x2="${w - padding.right}" y2="${y}" class="chart-grid-line" />
+          <text x="${padding.left - 8}" y="${y + 3}" class="chart-label-text" text-anchor="end">${p.toFixed(0)}</text>
+        `;
+      }).join('')}
+      
+      ${[ 0, 5, 10, 15, 20 ].map(v => {
+        const x = padding.left + (v / 20) * graphW;
+        return `
+          <line x1="${x}" y1="${padding.top}" x2="${x}" y2="${h - padding.bottom}" class="chart-grid-line" />
+          <text x="${x}" y="${h - padding.bottom + 14}" class="chart-label-text" text-anchor="middle">${v}</text>
+        `;
+      }).join('')}
+      
+      <!-- Grid Border Axis -->
+      <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${h - padding.bottom}" class="chart-axis-line" />
+      <line x1="${padding.left}" y1="${h - padding.bottom}" x2="${w - padding.right}" y2="${h - padding.bottom}" class="chart-axis-line" />
+      
+      <!-- Area curve -->
+      <path d="M${padding.left},${h - padding.bottom} L${powerPoints} L${w - padding.right},${h - padding.bottom} Z" class="chart-area-power" />
+      
+      <!-- Line -->
+      <path d="M${powerPoints}" class="chart-line-power" />
+      
+      <!-- Race Speed Vertical line indicator -->
+      <line x1="${xRace}" y1="${padding.top}" x2="${xRace}" y2="${h - padding.bottom}" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="2 2" />
+      
+      <!-- Interactive Point at Race Speed -->
+      <circle cx="${xRace}" cy="${racePowerCoord.split(',')[1]}" r="4.5" class="chart-marker chart-marker-power" />
+      
+      <!-- Legend -->
+      <g transform="translate(${padding.left + 15}, ${padding.top + 10})">
+        <rect x="0" y="0" width="8" height="8" fill="#ff9d00" rx="2"/>
+        <text x="12" y="8" class="chart-label-text" style="fill:var(--text-primary);">Aero Power Required (W)</text>
+      </g>
+      
+      <!-- X Axis Label -->
+      <text x="${padding.left + graphW / 2}" y="${h - 5}" class="chart-label-text" text-anchor="middle" style="font-size: 8.5px; fill: var(--text-secondary);">Velocity (m/s)</text>
+    </svg>
+  `;
+}
+window.renderPerformanceCharts = renderPerformanceCharts;
+
+// Window resize handler for performance charts
+window.addEventListener('resize', () => {
+  if (activeStage === 4) {
+    renderPerformanceCharts();
+  }
+});
+
+// Helper function to reset active model states
+function resetActiveGeometry() {
+  clearActiveGeometry();
+  
+  viewportPlaceholder.style.display = 'flex';
+  dimensionLabels.style.display = 'none';
+  activeModelTitle.textContent = 'No Geometry Loaded';
+  activeModelStatus.style.display = 'none';
+  activeFileKey = null;
+  activeFilename = null;
+  activeUrl = null;
+  
+  // Clear Stats UI
+  statTriangles.textContent = '-';
+  statVertices.textContent = '-';
+  statVolume.textContent = '-';
+  statSurfaceArea.textContent = '-';
+  statFrontalArea.textContent = '-';
+  statCdA.textContent = '-';
+  currentFrontalArea = 0;
+  dimLen.textContent = '-';
+  dimWid.textContent = '-';
+  dimHei.textContent = '-';
+  regLenVal.textContent = '-';
+  regWidVal.textContent = '-';
+  regHeiVal.textContent = '-';
+  regWatertightVal.textContent = 'Not Checked';
+  regSummary.textContent = 'No geometry loaded';
+  regSummary.className = 'reg-summary-box';
+  document.querySelectorAll('.reg-item').forEach(el => el.className = 'reg-item');
+  
+  // Reset Dynamic Stage Data Updates
+  const detailsEmpty = document.getElementById('import-details-empty');
+  const detailsLoaded = document.getElementById('import-details-loaded');
+  const metaFilename = document.getElementById('meta-filename');
+  if (detailsEmpty) detailsEmpty.style.display = 'flex';
+  if (detailsLoaded) detailsLoaded.style.display = 'none';
+  if (metaFilename) metaFilename.textContent = '-';
+
+  // Lock stages 2, 3, and 4
+  lockStage(2);
+  lockStage(3);
+  lockStage(4);
+  switchStage(1);
 }
 
 // --- Custom 3D Prominent Axes Helper (Cylinders and Cones) ---
@@ -249,6 +570,18 @@ function loadSTL(originalName, viewUrl, fileKey) {
       item.classList.remove('active');
     }
   });
+
+  // Dynamic Stage Data Updates
+  const detailsEmpty = document.getElementById('import-details-empty');
+  const detailsLoaded = document.getElementById('import-details-loaded');
+  const metaFilename = document.getElementById('meta-filename');
+  if (detailsEmpty) detailsEmpty.style.display = 'none';
+  if (detailsLoaded) detailsLoaded.style.display = 'block';
+  if (metaFilename) metaFilename.textContent = originalName;
+
+  // Unlock and switch to Stage 2
+  unlockStage(2);
+  switchStage(2);
 
   const loader = new STLLoader();
   
@@ -485,6 +818,9 @@ function computeStats(geometry, size) {
     regSummary.textContent = 'FAILED RULES: ' + reasons.join(' & ');
     regSummary.className = 'reg-summary-box fail';
   }
+
+  // Unlock Stage 3 since analysis is complete
+  unlockStage(3);
 }
 
 function calculateSurfaceArea(geometry) {
@@ -718,31 +1054,7 @@ function renderLibraryList(files, selectFileKey = null) {
           
           // If deleted file is active, reset scene
           if (activeFileKey === file.fileKey) {
-            clearActiveGeometry();
-            viewportPlaceholder.style.display = 'flex';
-            dimensionLabels.style.display = 'none';
-            activeModelTitle.textContent = 'No Geometry Loaded';
-            activeModelStatus.style.display = 'none';
-            activeFileKey = null;
-            
-            // Clear stats
-            statTriangles.textContent = '-';
-            statVertices.textContent = '-';
-            statVolume.textContent = '-';
-            statSurfaceArea.textContent = '-';
-            statFrontalArea.textContent = '-';
-            statCdA.textContent = '-';
-            currentFrontalArea = 0;
-            dimLen.textContent = '-';
-            dimHei.textContent = '-';
-            dimWid.textContent = '-';
-            regLenVal.textContent = '-';
-            regWidVal.textContent = '-';
-            regHeiVal.textContent = '-';
-            regWatertightVal.textContent = 'Not Checked';
-            regSummary.textContent = 'No geometry loaded';
-            regSummary.className = 'reg-summary-box';
-            document.querySelectorAll('.reg-item').forEach(el => el.className = 'reg-item');
+            resetActiveGeometry();
           }
           
           fetchLibrary();
@@ -1041,32 +1353,8 @@ function handleLogout() {
   idToken = null;
   localStorage.removeItem('caucsim_id_token');
   
-  // Clear Three.js scene
-  clearActiveGeometry();
-  viewportPlaceholder.style.display = 'flex';
-  dimensionLabels.style.display = 'none';
-  activeModelTitle.textContent = 'No Geometry Loaded';
-  activeModelStatus.style.display = 'none';
-  activeFileKey = null;
-  
-  // Clear Stats UI
-  statTriangles.textContent = '-';
-  statVertices.textContent = '-';
-  statVolume.textContent = '-';
-  statSurfaceArea.textContent = '-';
-  statFrontalArea.textContent = '-';
-  statCdA.textContent = '-';
-  currentFrontalArea = 0;
-  dimLen.textContent = '-';
-  dimHei.textContent = '-';
-  dimWid.textContent = '-';
-  regLenVal.textContent = '-';
-  regWidVal.textContent = '-';
-  regHeiVal.textContent = '-';
-  regWatertightVal.textContent = 'Not Checked';
-  regSummary.textContent = 'No geometry loaded';
-  regSummary.className = 'reg-summary-box';
-  document.querySelectorAll('.reg-item').forEach(el => el.className = 'reg-item');
+  // Reset active geometry
+  resetActiveGeometry();
   
   libraryList.innerHTML = '';
   libraryEmpty.style.display = 'block';
@@ -1322,6 +1610,9 @@ async function startCfdSimulation() {
     // Start polling
     startCfdPolling();
     
+    // Switch to Stage 3
+    switchStage(3);
+    
   } catch (err) {
     console.error(err);
     alert(`CFD Launch Error: ${err.message}`);
@@ -1370,9 +1661,12 @@ async function pollCfdStatus() {
     if (job.status === 'completed') {
       stopCfdPolling();
       displayCfdResults(job);
+      unlockStage(4);
+      switchStage(4);
     } else if (job.status === 'failed') {
       stopCfdPolling();
       displayFailedCfdState(job);
+      switchStage(3);
     }
   } catch (err) {
     console.error("Error polling CFD status:", err);
@@ -1521,8 +1815,25 @@ function clearCfdRun() {
   
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
-    consoleEl.textContent = 'Waiting for droplet boot...';
+    consoleEl.textContent = 'Waiting for simulation to start...';
   }
+  
+  // Lock Stage 4 and return to Stage 2 or 1
+  lockStage(4);
+  if (activeFileKey) {
+    switchStage(2);
+  } else {
+    switchStage(1);
+  }
+  
+  // Clear simulation results UI
+  document.getElementById('cfd-cd').textContent = '-';
+  document.getElementById('cfd-cda').textContent = '-';
+  document.getElementById('cfd-cl').textContent = '-';
+  document.getElementById('cfd-cla').textContent = '-';
+  document.getElementById('cfd-drag-force').textContent = '-';
+  document.getElementById('cfd-lift-force').textContent = '-';
+  document.getElementById('cfd-power').textContent = '-';
   
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (btnRunCfd) {
@@ -1531,7 +1842,7 @@ function clearCfdRun() {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
         <path d="M5 3l14 9-14 9V3z"/>
       </svg>
-      Run CFD Simulation
+        Run CFD Simulation
     `;
   }
 }
@@ -1596,8 +1907,36 @@ function initCfdRunner() {
   }
   
   if (activeJobId) {
+    unlockStage(2);
+    unlockStage(3);
     showCfdMonitor(true);
     startCfdPolling();
+    
+    // Fetch the job status first to determine active stage
+    fetch(`/api/jobs/${activeJobId}`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+      }
+    }).then(res => res.json()).then(job => {
+      if (job.status === 'completed') {
+        unlockStage(4);
+        displayCfdResults(job);
+        switchStage(4);
+      } else if (job.status === 'failed') {
+        displayFailedCfdState(job);
+        switchStage(3);
+      } else {
+        switchStage(3);
+      }
+    }).catch(err => {
+      console.error(err);
+      switchStage(3);
+    });
+  } else if (activeFileKey) {
+    unlockStage(2);
+    switchStage(2);
+  } else {
+    switchStage(1);
   }
 }
 
