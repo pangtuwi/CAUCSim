@@ -870,6 +870,16 @@ app.get('/api/jobs/:id', requireAuth, async (req, res) => {
             jobState.completedAt = new Date().toISOString();
             jobState.updatedAt = new Date().toISOString();
             stateChanged = true;
+          } else if (doRes.ok) {
+            const doData = await doRes.json();
+            const dropletStatus = doData.droplet && doData.droplet.status;
+            if (dropletStatus === 'off' || dropletStatus === 'archive') {
+              jobState.status = 'failed';
+              jobState.error = `DigitalOcean droplet is inactive (status: ${dropletStatus}).`;
+              jobState.completedAt = new Date().toISOString();
+              jobState.updatedAt = new Date().toISOString();
+              stateChanged = true;
+            }
           }
         } catch (err) {
           console.error(`Error verifying droplet ${jobState.dropletId} status:`, err);
