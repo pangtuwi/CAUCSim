@@ -19,15 +19,6 @@ app.use(express.json());
 // Detect if running in AWS Lambda vs local machine
 const isLambda = !!process.env.LAMBDA_TASK_ROOT;
 
-// Dynamically set directory path (/tmp for AWS Lambda, local folder for dev)
-const uploadDir = isLambda 
-  ? path.join('/tmp', 'uploads') 
-  : path.join(__dirname, 'uploads');
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 // Serve frontend static assets with cache-busting headers
 app.use(express.static('public', {
   etag: true,
@@ -42,47 +33,31 @@ app.use(express.static('public', {
     }
   }
 }));
-app.use('/uploads', express.static(uploadDir));
 
 // AWS S3 Configuration
 const bucketName = process.env.S3_BUCKET_NAME;
 const region = process.env.AWS_REGION || 'eu-west-2';
 
-let s3Client = null;
-let useMockS3 = false;
-
 if (!bucketName) {
-  console.warn("WARNING: S3_BUCKET_NAME is not configured. Running in Local Disk Mock Mode.");
-  useMockS3 = true;
-} else {
-  s3Client = new S3Client({ region });
+  throw new Error("FATAL ERROR: S3_BUCKET_NAME is not configured.");
 }
+const s3Client = new S3Client({ region });
 
 // AWS Cognito Configuration
 const userPoolId = process.env.COGNITO_USER_POOL_ID;
 const clientId = process.env.COGNITO_CLIENT_ID;
 
-// Force Cognito auth mode in production/Lambda environments to prevent mock bypass vulnerabilities
-const isProduction = process.env.NODE_ENV === 'production' || isLambda;
-const useCognito = isProduction || !!(userPoolId && clientId);
+if (!userPoolId || !clientId) {
+  throw new Error("FATAL ERROR: AWS Cognito environment variables (COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID) are missing!");
+}
 
 const { CognitoJwtVerifier } = require("aws-jwt-verify");
-let verifier = null;
-
-if (useCognito) {
-  if (userPoolId && clientId) {
-    verifier = CognitoJwtVerifier.create({
-      userPoolId: userPoolId,
-      tokenUse: "id",
-      clientId: clientId
-    });
-    console.log("AWS Cognito Authentication initialized.");
-  } else {
-    console.error("FATAL ERROR: AWS Cognito environment variables (COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID) are missing in production!");
-  }
-} else {
-  console.warn("WARNING: AWS Cognito credentials not configured. Running in Mock Authentication Mode.");
-}
+const verifier = CognitoJwtVerifier.create({
+  userPoolId: userPoolId,
+  tokenUse: "id",
+  clientId: clientId
+});
+console.log("AWS Cognito Authentication initialized.");
 
 // Authentication Middleware
 const requireAuth = async (req, res, next) => {
@@ -92,20 +67,6 @@ const requireAuth = async (req, res, next) => {
   }
   
   const token = authHeader.split(" ")[1];
-  
-  if (!useCognito) {
-    // Mock Auth Mode: Accept a dummy token
-    if (token === "mock-session-token") {
-      req.user = { email: "developer@cauc.local" };
-      return next();
-    }
-    return res.status(401).json({ error: "Invalid mock session token" });
-  }
-  
-  // Cognito Auth Mode
-  if (!verifier) {
-    return res.status(500).json({ error: "Cognito authentication is enabled but not configured on the server." });
-  }
   
   try {
     const payload = await verifier.verify(token);
@@ -126,11 +87,11 @@ const requireAuth = async (req, res, next) => {
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'online',
-    storage: useMockS3 ? 'local-mock' : 'aws-s3',
-    bucket: bucketName || null,
+    storage: 'aws-s3',
+    auth: 'aws-cognito',
+    bucketName: bucketName,
     region: region,
-    authMode: useCognito ? 'cognito' : 'mock',
-    cognito: useCognito ? { clientId, region } : null
+    cognito: { clientId: clientId, region: region }
   });
 });
 
@@ -145,122 +106,66 @@ app.post('/api/get-upload-url', requireAuth, async (req, res) => {
   const uniqueKey = `${Date.now()}_${cleanName}`;
   const s3Key = `uploads/${uniqueKey}`;
 
-  if (useMockS3) {
-    // Local Mock S3 Mode
-    // Return relative paths pointing back to local mock server
-    res.json({
-      uploadUrl: `/api/mock-upload/${uniqueKey}`,
-      viewUrl: `/uploads/${uniqueKey}`,
-      fileKey: s3Key
+  try {
+    // Generate PUT presigned URL for direct uploading
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: s3Key,
+      ContentType: fileType || 'application/octet-stream'
     });
-  } else {
-    // Production AWS S3 Mode
-    try {
-      // Generate PUT presigned URL for direct uploading
-      const putCommand = new PutObjectCommand({
-        Bucket: bucketName,
-        Key: s3Key,
-        ContentType: fileType || 'application/octet-stream'
-      });
-      const uploadUrl = await getSignedUrl(s3Client, putCommand, { expiresIn: 300 });
+    const uploadUrl = await getSignedUrl(s3Client, putCommand, { expiresIn: 300 });
 
-      // Generate GET presigned URL for direct downloading/viewing in Three.js
-      const getCommand = new GetObjectCommand({
-        Bucket: bucketName,
-        Key: s3Key
-      });
-      const viewUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    // Generate GET presigned URL for direct downloading/viewing in Three.js
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: s3Key
+    });
+    const viewUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
 
-      res.json({ uploadUrl, viewUrl, fileKey: s3Key });
-    } catch (err) {
-      console.error("S3 Signing Error:", err);
-      res.status(500).json({ error: 'Failed to generate S3 presigned URLs' });
-    }
+    res.json({ uploadUrl, viewUrl, fileKey: s3Key });
+  } catch (err) {
+    console.error("S3 Signing Error:", err);
+    res.status(500).json({ error: 'Failed to generate S3 presigned URLs' });
   }
-});
-
-// Mock S3 PUT upload handler (used only in local disk mock mode)
-app.put('/api/mock-upload/:fileKey', requireAuth, express.raw({ type: '*/*', limit: '500mb' }), (req, res) => {
-  if (!useMockS3) {
-    return res.status(400).json({ error: 'Mock upload is only supported in Mock Mode' });
-  }
-  const fileKey = req.params.fileKey;
-  if (fileKey.includes('..') || fileKey.includes('/') || fileKey.includes('\\')) {
-    return res.status(400).json({ error: 'Invalid mock file key' });
-  }
-  
-  const filePath = path.join(uploadDir, fileKey);
-  fs.writeFile(filePath, req.body, (err) => {
-    if (err) {
-      console.error("Mock Write Error:", err);
-      return res.status(500).json({ error: 'Failed to write file to mock storage' });
-    }
-    res.json({ message: 'File written to local mock storage' });
-  });
 });
 
 // 2. Get Geometry Library List
 app.get('/api/files', requireAuth, async (req, res) => {
-  if (useMockS3) {
-    // Local Mock S3 Mode
-    fs.readdir(uploadDir, (err, files) => {
-      if (err) {
-        return res.status(500).json({ error: 'Failed to read local library' });
-      }
-      const stlFiles = files
-        .filter(file => file.toLowerCase().endsWith('.stl'))
-        .map(file => {
-          const filePath = path.join(uploadDir, file);
-          const stats = fs.statSync(filePath);
-          return {
-            fileKey: `uploads/${file}`,
-            originalName: file.substring(file.indexOf('_') + 1),
-            size: stats.size,
-            uploadedAt: stats.mtime,
-            viewUrl: `/uploads/${file}`
-          };
-        })
-        .sort((a, b) => b.uploadedAt - a.uploadedAt);
-      res.json(stlFiles);
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: 'uploads/'
     });
-  } else {
-    // Production AWS S3 Mode
-    try {
-      const listCommand = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: 'uploads/'
-      });
-      const data = await s3Client.send(listCommand);
-      
-      const s3Files = await Promise.all((data.Contents || [])
-        .filter(item => item.Key.toLowerCase().endsWith('.stl'))
-        .map(async item => {
-          // Generate a fresh presigned GET URL for viewing this file
-          const getCommand = new GetObjectCommand({
-            Bucket: bucketName,
-            Key: item.Key
-          });
-          const viewUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-          
-          // Reconstruct original name: strip "uploads/" prefix and Date.now() timestamp
-          const keyWithoutPrefix = item.Key.replace('uploads/', '');
-          const originalName = keyWithoutPrefix.substring(keyWithoutPrefix.indexOf('_') + 1);
+    const data = await s3Client.send(listCommand);
+    
+    const s3Files = await Promise.all((data.Contents || [])
+      .filter(item => item.Key.toLowerCase().endsWith('.stl'))
+      .map(async item => {
+        // Generate a fresh presigned GET URL for viewing this file
+        const getCommand = new GetObjectCommand({
+          Bucket: bucketName,
+          Key: item.Key
+        });
+        const viewUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+        
+        // Reconstruct original name: strip "uploads/" prefix and Date.now() timestamp
+        const keyWithoutPrefix = item.Key.replace('uploads/', '');
+        const originalName = keyWithoutPrefix.substring(keyWithoutPrefix.indexOf('_') + 1);
 
-          return {
-            fileKey: item.Key,
-            originalName: originalName,
-            size: item.Size,
-            uploadedAt: item.LastModified,
-            viewUrl: viewUrl
-          };
-        })
-      );
-      s3Files.sort((a, b) => b.uploadedAt - a.uploadedAt);
-      res.json(s3Files);
-    } catch (err) {
-      console.error("S3 List Error:", err);
-      res.status(500).json({ error: 'Failed to list files from S3' });
-    }
+        return {
+          fileKey: item.Key,
+          originalName: originalName,
+          size: item.Size,
+          uploadedAt: item.LastModified,
+          viewUrl: viewUrl
+        };
+      })
+    );
+    s3Files.sort((a, b) => b.uploadedAt - a.uploadedAt);
+    res.json(s3Files);
+  } catch (err) {
+    console.error("S3 List Error:", err);
+    res.status(500).json({ error: 'Failed to list files from S3' });
   }
 });
 
@@ -274,32 +179,16 @@ app.delete('/api/files/*fileKey', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid file key' });
   }
 
-  if (useMockS3) {
-    // Local Mock S3 Mode
-    const filename = fileKey.replace('uploads/', '');
-    const filePath = path.join(uploadDir, filename);
-    fs.unlink(filePath, (err) => {
-      if (err) {
-        if (err.code === 'ENOENT') {
-          return res.status(404).json({ error: 'File not found' });
-        }
-        return res.status(500).json({ error: 'Failed to delete local mock file' });
-      }
-      res.json({ message: 'File deleted from local mock storage' });
+  try {
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: fileKey
     });
-  } else {
-    // Production AWS S3 Mode
-    try {
-      const deleteCommand = new DeleteObjectCommand({
-        Bucket: bucketName,
-        Key: fileKey
-      });
-      await s3Client.send(deleteCommand);
-      res.json({ message: 'S3 object deleted successfully' });
-    } catch (err) {
-      console.error("S3 Delete Error:", err);
-      res.status(500).json({ error: 'Failed to delete S3 object' });
-    }
+    await s3Client.send(deleteCommand);
+    res.json({ message: 'S3 object deleted successfully' });
+  } catch (err) {
+    console.error("S3 Delete Error:", err);
+    res.status(500).json({ error: 'Failed to delete S3 object' });
   }
 });
 
@@ -307,144 +196,43 @@ app.delete('/api/files/*fileKey', requireAuth, async (req, res) => {
 // --- CFD Job Orchestration Helpers & Endpoints ---
 const crypto = require('crypto');
 
-// Save a job file (log or zip) to local mock directory or S3
 const saveJobFile = async (jobId, filename, content, contentType) => {
-  if (useMockS3) {
-    const jobFolder = path.join(uploadDir, 'results', jobId);
-    if (!fs.existsSync(jobFolder)) {
-      fs.mkdirSync(jobFolder, { recursive: true });
-    }
-    fs.writeFileSync(path.join(jobFolder, filename), content);
-  } else {
-    const putCommand = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: `results/${jobId}/${filename}`,
-      Body: content,
-      ContentType: contentType || 'text/plain'
-    });
-    await s3Client.send(putCommand);
-  }
+  const putCommand = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: `results/${jobId}/${filename}`,
+    Body: content,
+    ContentType: contentType || 'text/plain'
+  });
+  await s3Client.send(putCommand);
 };
 
-// Save job state JSON to S3 or local directory
 const saveJobState = async (jobId, state) => {
   state.updatedAt = new Date().toISOString();
-  if (useMockS3) {
-    const jobFolder = path.join(uploadDir, 'results', jobId);
-    if (!fs.existsSync(jobFolder)) {
-      fs.mkdirSync(jobFolder, { recursive: true });
-    }
-    fs.writeFileSync(path.join(jobFolder, 'job.json'), JSON.stringify(state, null, 2));
-  } else {
-    const putCommand = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: `results/${jobId}/job.json`,
-      Body: JSON.stringify(state, null, 2),
-      ContentType: 'application/json'
-    });
-    await s3Client.send(putCommand);
-  }
+  const putCommand = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: `results/${jobId}/job.json`,
+    Body: JSON.stringify(state, null, 2),
+    ContentType: 'application/json'
+  });
+  await s3Client.send(putCommand);
 };
 
-// Read job state JSON from S3 or local directory
 const getJobState = async (jobId) => {
-  if (useMockS3) {
-    const jobPath = path.join(uploadDir, 'results', jobId, 'job.json');
-    if (!fs.existsSync(jobPath)) return null;
-    try {
-      return JSON.parse(fs.readFileSync(jobPath, 'utf8'));
-    } catch (e) {
-      return null;
-    }
-  } else {
-    try {
-      const getCommand = new GetObjectCommand({
-        Bucket: bucketName,
-        Key: `results/${jobId}/job.json`
-      });
-      const response = await s3Client.send(getCommand);
-      const data = await response.Body.transformToString();
-      return JSON.parse(data);
-    } catch (err) {
-      if (err.name === 'NoSuchKey' || err.code === 'NoSuchKey') return null;
-      throw err;
-    }
+  try {
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/job.json`
+    });
+    const response = await s3Client.send(getCommand);
+    const data = await response.Body.transformToString();
+    return JSON.parse(data);
+  } catch (err) {
+    if (err.name === 'NoSuchKey' || err.code === 'NoSuchKey') return null;
+    throw err;
   }
 };
 
-// Simulated CFD runner for Local Mock Mode
-const runSimulatedJob = async (jobId, frontalArea) => {
-  const isTest = process.env.NODE_ENV === 'test';
-  const steps = [
-    { stage: 'mesh_generation', delay: isTest ? 0 : 2000, log: '==> Running surfaceFeatures...\nGenerating eMesh files...\n==> Running blockMesh...\nGenerated background mesh...\n==> Running decomposePar...\nDecomposed domain into 16 subdomains.\n' },
-    { stage: 'solving', delay: isTest ? 0 : 4000, log: '==> Running snappyHexMesh...\nCreated hex-dominant mesh...\n==> Running potentialFoam...\nInitialized pressure field...\n==> Running foamRun (solving simpleFoam)...\nTime = 100, residuals: p=0.001, U=0.0004\nTime = 200, residuals: p=0.0005, U=0.0001\nTime = 300, residuals: p=0.0001, U=0.00005\nTime = 400, residuals: p=0.00005, U=0.00001\nTime = 500, residuals: p=0.00001, U=0.000008\n' },
-    { stage: 'processing_results', delay: isTest ? 0 : 4000, log: '==> Running reconstructPar...\nReconstructed mesh and fields.\n==> Calculating aerodynamic forces...\nParsed forceCoeffs.dat.\n==> Packaging results into results.zip...\n' }
-  ];
 
-  let cumulativeLog = '==> Initialization complete. Starting simulated OpenFOAM run.\n';
-  await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
-
-  for (const step of steps) {
-    await new Promise(resolve => setTimeout(resolve, step.delay));
-    const jobState = await getJobState(jobId);
-    if (!jobState || jobState.status === 'failed') return;
-
-    jobState.stage = step.stage;
-    jobState.status = 'running';
-    await saveJobState(jobId, jobState);
-
-    cumulativeLog += step.log;
-    await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
-  }
-
-  // Finalize simulation metrics
-  await new Promise(resolve => setTimeout(resolve, isTest ? 0 : 2000));
-  const jobState = await getJobState(jobId);
-  if (!jobState || jobState.status === 'failed') return;
-
-  const cd = (0.26 + Math.random() * 0.04).toFixed(3);
-  const cl = (-0.15 + Math.random() * 0.05).toFixed(3);
-  const cm = (0.01 + Math.random() * 0.01).toFixed(3);
-  const aref = parseFloat(frontalArea) || 0.15;
-  const cda = (cd * aref).toFixed(4);
-  const cla = (cl * aref).toFixed(4);
-  const raceSpeed = 13.4;
-  const dragForce = (0.5 * 1.225 * Math.pow(raceSpeed, 2) * cda).toFixed(1);
-  const liftForce = (0.5 * 1.225 * Math.pow(raceSpeed, 2) * cla).toFixed(1);
-  const aeroPower = (dragForce * raceSpeed).toFixed(0);
-
-  cumulativeLog += '==> Simulation completed successfully!\n=============================================\n';
-  cumulativeLog += `Cd            : ${cd}\nCl            : ${cl}\nCm            : ${cm}\nCdA           : ${cda} m²\nClA           : ${cla} m²\n`;
-  cumulativeLog += `At race speed (${raceSpeed} m/s):\n`;
-  cumulativeLog += `  Drag force  : ${dragForce} N\n  Lift force  : ${liftForce} N\n  Aero power  : ${aeroPower} W\n=============================================\n`;
-  
-  await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
-  await saveJobFile(jobId, 'results.zip', Buffer.from('mock results zip content'), 'application/zip');
-
-  // Copy a default flow_slice.png image from public assets for local mock mode visualisation
-  const mockPngSrc = path.join(__dirname, 'public', 'sandbach_high.png');
-  if (fs.existsSync(mockPngSrc)) {
-    const pngContent = fs.readFileSync(mockPngSrc);
-    await saveJobFile(jobId, 'flow_slice.png', pngContent, 'image/png');
-  }
-
-  jobState.status = 'completed';
-  jobState.stage = 'completed';
-  jobState.completedAt = new Date().toISOString();
-  jobState.metrics = {
-    cd: parseFloat(cd),
-    cl: parseFloat(cl),
-    cm: parseFloat(cm),
-    cda: parseFloat(cda),
-    cla: parseFloat(cla),
-    aref: aref,
-    dragForce: parseFloat(dragForce),
-    liftForce: parseFloat(liftForce),
-    aeroPower: parseFloat(aeroPower)
-  };
-
-  await saveJobState(jobId, jobState);
-};
 
 // 1. POST /api/jobs: Queue/start simulation
 app.post('/api/jobs', requireAuth, async (req, res) => {
@@ -477,21 +265,10 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     await saveJobState(jobId, initialJobState);
 
     const doToken = process.env.DIGITALOCEAN_TOKEN;
-    const doSnapshotName = process.env.DIGITALOCEAN_SNAPSHOT_NAME || 'openfoam-base';
-    
-    // Check if DO credentials are provided, if not fallback to simulated run
-    if (!doToken || useMockS3) {
-      console.log(`Starting simulated CFD job ${jobId}...`);
-      if (process.env.NODE_ENV !== 'test') {
-        runSimulatedJob(jobId, frontalArea).catch(err => {
-          console.error("Simulated Job failed in background:", err);
-        });
-      }
-      
-      const clientState = { ...initialJobState };
-      delete clientState.jobToken;
-      return res.json(clientState);
+    if (!doToken) {
+      return res.status(400).json({ error: 'DigitalOcean credentials are not configured on the server. Cannot run CFD simulation.' });
     }
+    const doSnapshotName = process.env.DIGITALOCEAN_SNAPSHOT_NAME || 'openfoam-base';
 
     // Real DigitalOcean launch
     console.log(`Provisioning DigitalOcean droplet for job ${jobId}...`);
@@ -832,61 +609,35 @@ curl -s -X DELETE \\
 
 // 2. GET /api/jobs: List history of runs
 app.get('/api/jobs', requireAuth, async (req, res) => {
-  if (useMockS3) {
-    const resultsDir = path.join(uploadDir, 'results');
-    if (!fs.existsSync(resultsDir)) {
-      return res.json([]);
-    }
-    try {
-      const folders = fs.readdirSync(resultsDir);
-      const jobs = [];
-      for (const folder of folders) {
-        const jobPath = path.join(resultsDir, folder, 'job.json');
-        if (fs.existsSync(jobPath)) {
-          try {
-            const jobData = JSON.parse(fs.readFileSync(jobPath, 'utf8'));
-            const clientState = { ...jobData };
-            delete clientState.jobToken;
-            jobs.push(clientState);
-          } catch (e) {}
-        }
-      }
-      jobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
-      res.json(jobs);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to list local mock jobs' });
-    }
-  } else {
-    try {
-      const listCommand = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: 'results/'
-      });
-      const data = await s3Client.send(listCommand);
-      const jobKeys = (data.Contents || [])
-        .filter(item => item.Key.endsWith('job.json'))
-        .map(item => item.Key);
-      
-      const jobs = await Promise.all(
-        jobKeys.map(async key => {
-          const getCommand = new GetObjectCommand({
-            Bucket: bucketName,
-            Key: key
-          });
-          const response = await s3Client.send(getCommand);
-          const raw = await response.Body.transformToString();
-          const jobData = JSON.parse(raw);
-          const clientState = { ...jobData };
-          delete clientState.jobToken;
-          return clientState;
-        })
-      );
-      jobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
-      res.json(jobs);
-    } catch (err) {
-      console.error("S3 List Jobs Error:", err);
-      res.status(500).json({ error: 'Failed to list jobs from S3' });
-    }
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: 'results/'
+    });
+    const data = await s3Client.send(listCommand);
+    const jobKeys = (data.Contents || [])
+      .filter(item => item.Key.endsWith('job.json'))
+      .map(item => item.Key);
+    
+    const jobs = await Promise.all(
+      jobKeys.map(async key => {
+        const getCommand = new GetObjectCommand({
+          Bucket: bucketName,
+          Key: key
+        });
+        const response = await s3Client.send(getCommand);
+        const raw = await response.Body.transformToString();
+        const jobData = JSON.parse(raw);
+        const clientState = { ...jobData };
+        delete clientState.jobToken;
+        return clientState;
+      })
+    );
+    jobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    res.json(jobs);
+  } catch (err) {
+    console.error("S3 List Jobs Error:", err);
+    res.status(500).json({ error: 'Failed to list jobs from S3' });
   }
 });
 
@@ -989,79 +740,67 @@ app.post('/api/jobs/:id/callback', async (req, res) => {
   res.json({ message: 'Job state updated' });
 });
 
-// 5. GET /api/jobs/:id/log: Stream simulation.log from S3 or local disk
+// 5. GET /api/jobs/:id/log: Stream simulation.log from S3
 app.get('/api/jobs/:id/log', requireAuth, async (req, res) => {
   const jobId = req.params.id;
-  if (useMockS3) {
-    const logPath = path.join(uploadDir, 'results', jobId, 'simulation.log');
-    if (!fs.existsSync(logPath)) {
-      return res.status(404).json({ error: 'Log not found' });
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  try {
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/simulation.log`
+    });
+    const response = await s3Client.send(getCommand);
+    const logText = await response.Body.transformToString();
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(logText);
+  } catch (err) {
+    if (err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
+      return res.status(404).json({ error: 'Log file not found on S3' });
     }
-    return res.sendFile(logPath);
-  } else {
-    try {
-      const getCommand = new GetObjectCommand({
-        Bucket: bucketName,
-        Key: `results/${jobId}/simulation.log`
-      });
-      const response = await s3Client.send(getCommand);
-      const logText = await response.Body.transformToString();
-      res.setHeader('Content-Type', 'text/plain');
-      res.send(logText);
-    } catch (err) {
-      if (err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
-        return res.status(404).json({ error: 'Log file not found on S3' });
-      }
-      console.error("Failed to retrieve log from S3:", err);
-      res.status(500).json({ error: 'Failed to retrieve log from S3' });
-    }
+    console.error("Failed to retrieve log from S3:", err);
+    res.status(500).json({ error: 'Failed to retrieve log from S3' });
   }
 });
 
 // 6. GET /api/jobs/:id/download: Redirect or download results.zip
 app.get('/api/jobs/:id/download', requireAuth, async (req, res) => {
   const jobId = req.params.id;
-  if (useMockS3) {
-    const zipPath = path.join(uploadDir, 'results', jobId, 'results.zip');
-    if (!fs.existsSync(zipPath)) {
-      return res.status(404).json({ error: 'Results file not found' });
-    }
-    return res.sendFile(zipPath);
-  } else {
-    try {
-      const getCommand = new GetObjectCommand({
-        Bucket: bucketName,
-        Key: `results/${jobId}/results.zip`
-      });
-      const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-      res.redirect(url);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to generate results download URL' });
-    }
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  try {
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/results.zip`
+    });
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    res.redirect(url);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate results download URL' });
   }
 });
 
 // 7. GET /api/jobs/:id/visualisation: Redirect or serve flow_slice.png
 app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
   const jobId = req.params.id;
-  if (useMockS3) {
-    const imgPath = path.join(uploadDir, 'results', jobId, 'flow_slice.png');
-    if (!fs.existsSync(imgPath)) {
-      return res.status(404).json({ error: 'Flow visualisation not found' });
-    }
-    return res.sendFile(imgPath);
-  } else {
-    try {
-      const getCommand = new GetObjectCommand({
-        Bucket: bucketName,
-        Key: `results/${jobId}/flow_slice.png`
-      });
-      const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-      res.redirect(url);
-    } catch (err) {
-      console.error("Failed to generate S3 URL for flow slice:", err);
-      res.status(500).json({ error: 'Failed to generate visualisation download URL' });
-    }
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  try {
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/flow_slice.png`
+    });
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    res.redirect(url);
+  } catch (err) {
+    console.error("Failed to generate S3 URL for flow slice:", err);
+    res.status(500).json({ error: 'Failed to generate visualisation download URL' });
   }
 });
 

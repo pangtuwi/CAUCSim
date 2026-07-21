@@ -19,7 +19,7 @@ let unlockedStages = new Set([1]);
 
 // Authentication State
 let idToken = localStorage.getItem('caucsim_id_token') || null;
-let authMode = 'mock'; // 'cognito' | 'mock'
+let authMode = 'cognito'; // 'cognito'
 let cognitoConfig = null;
 let authSession = null;
 let challengeEmail = null;
@@ -1338,12 +1338,6 @@ async function checkStorageStatus() {
   
   if (!storageStatusEl || !storageStatusVal) return;
 
-  const isLocalhost = window.location.hostname === 'localhost' || 
-                      window.location.hostname === '127.0.0.1' || 
-                      window.location.hostname.startsWith('192.168.') || 
-                      window.location.hostname.startsWith('10.') ||
-                      window.location.hostname.startsWith('172.');
-
   try {
     const response = await fetch('/api/status');
     if (!response.ok) throw new Error();
@@ -1351,24 +1345,21 @@ async function checkStorageStatus() {
     console.log("Status API Response:", data);
     
     // Parse Auth Configuration
-    authMode = data.authMode || 'mock';
-    cognitoConfig = data.cognito;
+    authMode = data.auth || 'aws-cognito';
+    cognitoConfig = data.cognito || null;
     
-    console.log("Set btnMockLogin display to:", (authMode === 'mock' && isLocalhost) ? 'block' : 'none');
-    if (authMode === 'mock' && isLocalhost) {
-      btnMockLogin.style.display = 'block';
-    } else {
+    if (btnMockLogin) {
       btnMockLogin.style.display = 'none';
     }
     
     if (data.storage === 'aws-s3') {
       storageStatusEl.className = 'status-indicator online';
       storageStatusVal.textContent = 'AWS S3';
-      storageStatusEl.title = `S3 Bucket: ${data.bucket || 'unknown'}\nRegion: ${data.region || 'unknown'}`;
+      storageStatusEl.title = `S3 Bucket: ${data.bucketName || 'unknown'}\nRegion: ${data.region || 'unknown'}`;
     } else {
-      storageStatusEl.className = 'status-indicator standby';
-      storageStatusVal.textContent = 'Local (Mock)';
-      storageStatusEl.title = 'AWS S3 is not configured. Running in Local Disk Mock Mode.';
+      storageStatusEl.className = 'status-indicator offline';
+      storageStatusVal.textContent = 'Disconnected';
+      storageStatusEl.title = 'AWS S3 is not configured.';
     }
 
     validateSession();
@@ -1377,10 +1368,8 @@ async function checkStorageStatus() {
     storageStatusEl.className = 'status-indicator offline';
     storageStatusVal.textContent = 'Disconnected';
     storageStatusEl.title = 'Could not connect to storage provider status API.';
-    if (isLocalhost) {
-      btnMockLogin.style.display = 'block'; // Enable mock login as fallback ONLY on localhost
-    } else {
-      btnMockLogin.style.display = 'none'; // Never show on live server
+    if (btnMockLogin) {
+      btnMockLogin.style.display = 'none';
     }
     validateSession();
   }
@@ -1508,71 +1497,58 @@ authForm.addEventListener('submit', async (e) => {
   const email = authEmail.value.trim();
   const password = authPassword.value;
   
-  if (authMode === 'mock') {
-    // Mock login bypass helper: accept any credentials
-    if (email && password) {
-      handleLoginSuccess('mock-session-token');
-    } else {
-      showAuthError('Email and password are required.');
-    }
-  } else {
-    // Production Cognito HTTP flow
-    try {
-      const cognitoUrl = `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`;
-      const response = await fetch(cognitoUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-amz-json-1.1',
-          'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
-        },
-        body: JSON.stringify({
-          AuthFlow: 'USER_PASSWORD_AUTH',
-          ClientId: cognitoConfig.clientId,
-          AuthParameters: {
-            USERNAME: email,
-            PASSWORD: password
-          }
-        })
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Cognito authentication failed');
-      }
-      
-      if (!data.AuthenticationResult) {
-        if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
-          // Transition form to password reset state
-          authSession = data.Session;
-          challengeEmail = email;
-          
-          authEmail.closest('.form-group').style.display = 'none';
-          authPassword.closest('.form-group').style.display = 'none';
-          document.getElementById('challenge-fields').style.display = 'flex';
-          btnLoginSubmit.textContent = 'Confirm New Password';
-          btnLoginSubmit.disabled = false;
-          authPassword.value = '';
-          
-          // Disable validation on hidden fields and enable on new password field
-          authEmail.required = false;
-          authPassword.required = false;
-          document.getElementById('auth-new-password').required = true;
-          return;
+  // Production Cognito HTTP flow
+  try {
+    const cognitoUrl = `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`;
+    const response = await fetch(cognitoUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-amz-json-1.1',
+        'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
+      },
+      body: JSON.stringify({
+        AuthFlow: 'USER_PASSWORD_AUTH',
+        ClientId: cognitoConfig.clientId,
+        AuthParameters: {
+          USERNAME: email,
+          PASSWORD: password
         }
-        throw new Error('Authentication challenge required but not supported.');
-      }
-      
-      const token = data.AuthenticationResult.IdToken;
-      handleLoginSuccess(token);
-    } catch (err) {
-      console.error("Cognito login error:", err);
-      showAuthError(err.message || 'Login failed. Please check credentials.');
+      })
+    });
+    
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Cognito authentication failed');
     }
+    
+    if (!data.AuthenticationResult) {
+      if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+        // Transition form to password reset state
+        authSession = data.Session;
+        challengeEmail = email;
+        
+        authEmail.closest('.form-group').style.display = 'none';
+        authPassword.closest('.form-group').style.display = 'none';
+        document.getElementById('challenge-fields').style.display = 'flex';
+        btnLoginSubmit.textContent = 'Confirm New Password';
+        btnLoginSubmit.disabled = false;
+        authPassword.value = '';
+        
+        // Disable validation on hidden fields and enable on new password field
+        authEmail.required = false;
+        authPassword.required = false;
+        document.getElementById('auth-new-password').required = true;
+        return;
+      }
+      throw new Error('Authentication challenge required but not supported.');
+    }
+    
+    const token = data.AuthenticationResult.IdToken;
+    handleLoginSuccess(token);
+  } catch (err) {
+    console.error("Cognito login error:", err);
+    showAuthError(err.message || 'Login failed. Please check credentials.');
   }
-});
-
-btnMockLogin.addEventListener('click', () => {
-  handleLoginSuccess('mock-session-token');
 });
 
 btnLogout.addEventListener('click', handleLogout);
@@ -1636,7 +1612,7 @@ async function startCfdSimulation() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+        'Authorization': `Bearer ${idToken || ''}`
       },
       body: JSON.stringify({
         fileKey: activeFileKey,
@@ -1696,7 +1672,7 @@ async function pollCfdStatus() {
   try {
     const response = await fetch(`/api/jobs/${activeJobId}`, {
       headers: {
-        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+        'Authorization': `Bearer ${idToken || ''}`
       }
     });
     
@@ -1740,7 +1716,7 @@ async function fetchCfdLogs() {
   try {
     const res = await fetch(`/api/jobs/${activeJobId}/log`, {
       headers: {
-        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+        'Authorization': `Bearer ${idToken || ''}`
       }
     });
     if (res.ok) {
@@ -1862,7 +1838,7 @@ async function fetchFlowVisualisation(jobId) {
   try {
     const res = await fetch(`/api/jobs/${jobId}/visualisation`, {
       headers: {
-        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+        'Authorization': `Bearer ${idToken || ''}`
       }
     });
     
@@ -2060,7 +2036,7 @@ function initCfdRunner() {
         
         const res = await fetch(`/api/jobs/${activeJobId}/download`, {
           headers: {
-            'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+            'Authorization': `Bearer ${idToken || ''}`
           }
         });
         
@@ -2088,7 +2064,7 @@ function initCfdRunner() {
     // Fetch the job status first to determine active stage
     fetch(`/api/jobs/${activeJobId}`, {
       headers: {
-        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+        'Authorization': `Bearer ${idToken || ''}`
       }
     }).then(res => res.json()).then(job => {
       if (job.status === 'completed') {
