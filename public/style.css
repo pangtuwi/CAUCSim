@@ -229,6 +229,7 @@ body {
 .sidebar.stats-panel {
   border-right: none;
   border-left: 1px solid var(--border-color);
+  overflow-y: hidden;
 }
 
 .panel-section {
