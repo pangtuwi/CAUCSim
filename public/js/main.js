@@ -1730,11 +1730,37 @@ async function fetchCfdLogs() {
       const consoleEl = document.getElementById('cfd-console');
       if (consoleEl) {
         consoleEl.textContent = logText;
-        consoleEl.scrollTop = consoleEl.scrollHeight;
+        setTimeout(() => {
+          consoleEl.scrollTop = consoleEl.scrollHeight;
+        }, 10);
       }
     }
   } catch (e) {
     console.error("Error fetching logs:", e);
+  }
+}
+
+function updateEngineStatus(job) {
+  const engineStatus = document.getElementById('engine-status');
+  const engineStatusVal = document.getElementById('engine-status-val');
+  if (!engineStatus || !engineStatusVal) return;
+  
+  if (!job || job.status === 'completed' || job.status === 'failed') {
+    engineStatus.className = 'status-indicator standby';
+    engineStatusVal.textContent = 'Standby';
+  } else if (job.status === 'queued') {
+    engineStatus.className = 'status-indicator online';
+    engineStatusVal.textContent = 'Queued';
+  } else if (job.status === 'running') {
+    engineStatus.className = 'status-indicator online';
+    
+    let stageText = 'Running';
+    if (job.stage === 'initializing') stageText = 'Initializing';
+    else if (job.stage === 'mesh_generation') stageText = 'Meshing';
+    else if (job.stage === 'solving') stageText = 'Solving';
+    else if (job.stage === 'processing_results') stageText = 'Processing';
+    
+    engineStatusVal.textContent = stageText;
   }
 }
 
@@ -1793,6 +1819,8 @@ function updateCfdMonitorState(job) {
     statusBadge.style.color = 'var(--accent-cyan)';
     progressFill.style.background = 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple))';
   }
+  
+  updateEngineStatus(job);
 }
 
 function displayCfdResults(job) {
@@ -1802,14 +1830,26 @@ function displayCfdResults(job) {
   const m = job.metrics;
   if (!m) return;
   
-  document.getElementById('cfd-cd').textContent = m.cd.toFixed(3);
-  document.getElementById('cfd-cda').textContent = m.cda.toFixed(4) + ' m²';
-  document.getElementById('cfd-cl').textContent = m.cl.toFixed(3);
-  document.getElementById('cfd-cla').textContent = m.cla.toFixed(4) + ' m²';
+  const density = 1.225; // kg/m³
+  const speed = 13.4;    // m/s (approx 30 mph Greenpower race speed)
   
-  document.getElementById('cfd-drag-force').textContent = m.dragForce.toFixed(1) + ' N';
-  document.getElementById('cfd-lift-force').textContent = m.liftForce.toFixed(1) + ' N';
-  document.getElementById('cfd-power').textContent = m.aeroPower.toFixed(0) + ' W';
+  const cdVal = m.cd !== undefined ? m.cd : 0;
+  const clVal = m.cl !== undefined ? m.cl : 0;
+  const cdaVal = m.cda !== undefined ? m.cda : (cdVal * (m.aref || 0.197));
+  const claVal = m.cla !== undefined ? m.cla : (clVal * (m.aref || 0.197));
+  
+  const dragForce = m.dragForce !== undefined ? m.dragForce : (0.5 * density * speed * speed * cdaVal);
+  const liftForce = m.liftForce !== undefined ? m.liftForce : (0.5 * density * speed * speed * claVal);
+  const aeroPower = m.aeroPower !== undefined ? m.aeroPower : (dragForce * speed);
+  
+  document.getElementById('cfd-cd').textContent = cdVal.toFixed(3);
+  document.getElementById('cfd-cda').textContent = cdaVal.toFixed(4) + ' m²';
+  document.getElementById('cfd-cl').textContent = clVal.toFixed(3);
+  document.getElementById('cfd-cla').textContent = claVal.toFixed(4) + ' m²';
+  
+  document.getElementById('cfd-drag-force').textContent = dragForce.toFixed(1) + ' N';
+  document.getElementById('cfd-lift-force').textContent = liftForce.toFixed(1) + ' N';
+  document.getElementById('cfd-power').textContent = aeroPower.toFixed(0) + ' W';
   
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (btnRunCfd) {
@@ -1849,10 +1889,22 @@ function clearCfdRun() {
   localStorage.removeItem('caucsim_active_job_id');
   showCfdMonitor(false);
   showCfdResults(false);
+  updateEngineStatus(null);
   
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
-    consoleEl.textContent = 'Waiting for simulation to start...';
+    consoleEl.textContent = '';
+  }
+  const statusBadge = document.getElementById('cfd-status-badge');
+  if (statusBadge) {
+    statusBadge.textContent = 'Ready to Run';
+    statusBadge.style.background = 'rgba(255, 170, 0, 0.1)';
+    statusBadge.style.borderColor = '#ffaa00';
+    statusBadge.style.color = '#ffaa00';
+  }
+  const progressFill = document.getElementById('cfd-progress-fill');
+  if (progressFill) {
+    progressFill.style.width = '0%';
   }
   
   // Lock Stage 4 and return to Stage 2 or 1

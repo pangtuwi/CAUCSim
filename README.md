@@ -12,17 +12,19 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **High-Visibility Rendering:** Visualizes vehicle geometries in a standard CAD **Z-up coordinate system** (with Z as the vertical axis and the X-axis extending along the vehicle's length).
 - **Dynamic Headlight:** A camera-attached directional light follows orbit movements to guarantee visible surfaces are always clearly illuminated.
 - **Custom 3D Axes:** Features a prominent 3D axes helper (Red = X, Green = Y, Blue = Z) positioned at the origin to easily reference coordinates.
-- **Instant Client-Side Loading:** STL files are rendered immediately upon selection using in-memory blob references (`URL.createObjectURL`), bypassing initial upload wait times.
+- **Instant Client-Side Loading & State Reset:** STL files are rendered immediately upon selection using in-memory blob references (`URL.createObjectURL`). If a different model is loaded, the app automatically clears any active CFD polling and results states to avoid stale simulation overlays.
+- **Unit Selector Defaulting:** Model unit selector defaults to **Meters (m)** to align directly with CFD simulation requirements.
 
 ### 2. Aerodynamic Analytics
 - **Projected Frontal Area:** Uses an optimized 2D grid rasterization algorithm on the Y-Z plane to compute the exact projected frontal area ($m^2$) of the vehicle in under 15ms.
 - **CdA (Drag Area) Calculator:** Input an assumed Drag Coefficient ($C_d$) to instantly calculate the aerodynamic drag area ($CdA$).
 - **F24 Regulations Checklist:** Automatically validates model length ($\le 2400$ mm) and width ($\le 900$ mm) constraints, as well as mesh watertightness/closure.
+- **CFD Metric Scale Check:** Validates model dimensions and flags warnings if coordinates suggest a millimeter-to-meter scaling mismatch, preventing OpenFOAM solver divergence.
 
 ### 3. Serverless Storage Architecture (AWS S3)
 - **Direct-to-S3 Uploads:** Eliminates `multer` and multipart/form parsing. The Express server generates cryptographically signed PUT/GET URLs via the `@aws-sdk/s3-request-presigner` and the client PUTs the binary payload directly to AWS S3.
 - **Local Mock Fallback:** If S3 configurations are absent, the application seamlessly runs in a local disk fallback mode, simulating presigned storage flows.
-- **Connection Status indicators:** The top bar header dynamically updates to display the connection status of the Local Server, CAD Storage (AWS S3 vs Local Mock, complete with S3 bucket tooltips), and the OpenFOAM Engine.
+- **Dynamic Connection Status Indicators:** The header bar dynamically updates to show connection states for the Local Server, CAD Storage (complete with S3 bucket name tooltips), and the **OpenFOAM Engine** (which transitions between `Standby`, `Queued`, `Initializing`, `Meshing`, `Solving`, and `Processing` in real time).
 
 ### 4. Authentication via AWS Cognito
 - **Secure Sign In:** Protects sensitive CAD files and simulation endpoints. The frontend communicates directly with AWS Cognito User Pools (via HTTP fetch) to exchange credentials for ID tokens.
@@ -32,8 +34,11 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 
 ### 5. Elastic Cloud HPC Compute (DigitalOcean)
 - **Scale-to-Zero HPC Droplets:** Launches high-performance dedicated compute droplets (`gd-16vcpu-64gb`) on-demand from a pre-configured OpenFOAM image snapshot using the DigitalOcean API.
-- **Fail-Safe Droplet Self-Destruct:** Spawns an asynchronous 1-hour background sleep process (`(sleep 3600; curl -X DELETE ...) &`) on the droplet at boot. Even if the simulation hangs, runs into shell errors, or loses network connection, the droplet is guaranteed to destroy itself after exactly 1 hour to prevent runaway billing leaks.
-- **Direct S3 Data Ingestion:** Droplets use temporary credentials to download the case-template and STL file directly from S3, perform meshing (`blockMesh`/`snappyHexMesh`), solve aerodynamic forces, upload the resulting `results.zip` / `simulation.log`, and immediately self-destruct upon completion.
+- **Harmless Warning Suppression:** Wraps droplet environment setup in `set +e` and `set -e` to prevent non-critical shell warnings (e.g. bash context `pop_var_context` from `/opt/openfoam13/etc/bashrc` on Ubuntu 24.04) from aborting the boot sequence.
+- **Real-Time Solver Triggers:** Dynamically patches the droplet's `Allrun` script shebang to bash and inserts callback notification hooks right before `potentialFoam` and `foamRun` solver phases start.
+- **Fail-Safe Droplet Self-Destruct:** Spawns an asynchronous 1-hour background sleep process on the droplet at boot, utilizing token interpolation for authorization. Even if the simulation hangs, runs into shell errors, or loses network connection, the droplet is guaranteed to destroy itself after exactly 1 hour to prevent runaway billing leaks.
+- **Direct S3 Data Ingestion:** Droplets download the case-template and STL file directly from S3, perform meshing (`blockMesh`/`snappyHexMesh`), solve aerodynamic forces, upload the resulting `results.zip` / `simulation.log`, and immediately self-destruct.
+- **Independent Log Scrolling & Viewport Capping:** Constrains Stage 3 panel heights and utilizes deferred browser layout rendering (`setTimeout`) so that the terminal auto-scrolls to the bottom cleanly without pushing its scrollbar off-screen on smaller laptops.
 
 ---
 

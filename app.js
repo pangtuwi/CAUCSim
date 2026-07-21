@@ -538,7 +538,7 @@ export AWS_DEFAULT_REGION="\$AWS_REGION"
   echo "==> [SAFETY TIMEOUT] 1 hour elapsed. Self-destructing droplet..."
   DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
   curl -s -X DELETE \\
-       -H "Authorization: Bearer \${doToken}" \\
+       -H "Authorization: Bearer ${doToken}" \\
        "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
 ) &
 
@@ -623,6 +623,10 @@ echo "==> Extracting case template..."
 unzip -o template.zip
 rm template.zip
 
+# Adjust Allrun shebang to bash and insert solver status update
+sed -i '1s|#!/bin/sh|#!/bin/bash|' Allrun
+sed -i '/==> potentialFoam/i update_job_status "running" "solving"' Allrun
+
 # Ensure geometry folder exists
 mkdir -p constant/geometry
 
@@ -639,6 +643,10 @@ set +e
 source /opt/openfoam13/etc/bashrc
 set -e
 
+# Export helper function and variables so children (Allrun) can access them
+export -f update_job_status
+export JOB_ID JOB_TOKEN CALLBACK_URL S3_BUCKET
+
 # Run execution pipeline
 echo "==> Running OpenFOAM pipeline..."
 chmod +x Allrun
@@ -653,7 +661,7 @@ chmod +x Allrun
   # Self destruct
   DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
   curl -s -X DELETE \\
-       -H "Authorization: Bearer \${doToken}" \\
+       -H "Authorization: Bearer ${doToken}" \\
        "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
   exit 1
 }
@@ -726,7 +734,7 @@ kill \$LOG_SYNC_PID || true
 echo "==> Self-destructing droplet..."
 DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
 curl -s -X DELETE \\
-     -H "Authorization: Bearer \${doToken}" \\
+     -H "Authorization: Bearer ${doToken}" \\
      "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
 `;
 
