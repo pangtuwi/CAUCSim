@@ -6,6 +6,9 @@ provider:
   region: eu-west-2
   memorySize: 512
   stage: 'prod'    
+  apiGateway:
+    binaryMediaTypes:
+      - '*/*'
 
 functions:
   api:

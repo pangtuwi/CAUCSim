@@ -28,8 +28,20 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Serve frontend static assets
-app.use(express.static('public'));
+// Serve frontend static assets with cache-busting headers
+app.use(express.static('public', {
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  }
+}));
 app.use('/uploads', express.static(uploadDir));
 
 // AWS S3 Configuration
@@ -1016,4 +1028,6 @@ if (require.main === module) {
 }
 
 module.exports = app;
-module.exports.handler = serverless(app);
+module.exports.handler = serverless(app, {
+  binary: ['image/*', 'application/zip', 'application/octet-stream']
+});
