@@ -463,9 +463,11 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     // Check if DO credentials are provided, if not fallback to simulated run
     if (!doToken || useMockS3) {
       console.log(`Starting simulated CFD job ${jobId}...`);
-      runSimulatedJob(jobId, frontalArea).catch(err => {
-        console.error("Simulated Job failed in background:", err);
-      });
+      if (process.env.NODE_ENV !== 'test') {
+        runSimulatedJob(jobId, frontalArea).catch(err => {
+          console.error("Simulated Job failed in background:", err);
+        });
+      }
       
       const clientState = { ...initialJobState };
       delete clientState.jobToken;
@@ -540,17 +542,17 @@ export AWS_DEFAULT_REGION="\$AWS_REGION"
        "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
 ) &
 
-# Periodically push active log to S3 (every 5 seconds)
+# Periodically push active log to S3 (every 5 seconds) quiet and redirected to prevent log loops
 (
   while true; do
     if [ -f /root/cfd_run/simulation.log ]; then
-      aws s3 cp /root/cfd_run/simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" --content-type "text/plain" || true
+      aws s3 cp /root/cfd_run/simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" --content-type "text/plain" --quiet || true
     elif [ -f /var/log/cloud-init-output.log ]; then
-      aws s3 cp /var/log/cloud-init-output.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" --content-type "text/plain" || true
+      aws s3 cp /var/log/cloud-init-output.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" --content-type "text/plain" --quiet || true
     fi
     sleep 5
   done
-) &
+) >/dev/null 2>&1 &
 LOG_SYNC_PID=\$!
 
 # Helper function to update job state in S3 and callback URL
