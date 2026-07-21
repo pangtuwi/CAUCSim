@@ -76,6 +76,8 @@ const regHei = document.getElementById('reg-hei');
 const regHeiVal = document.getElementById('reg-hei-val');
 const regWatertight = document.getElementById('reg-watertight');
 const regWatertightVal = document.getElementById('reg-watertight-val');
+const regCfdScale = document.getElementById('reg-cfd-scale');
+const regCfdScaleVal = document.getElementById('reg-cfd-scale-val');
 const regSummary = document.getElementById('reg-summary');
 
 // Show login modal immediately if no token exists to prevent dashboard flashing
@@ -381,6 +383,7 @@ function resetActiveGeometry() {
   regWidVal.textContent = '-';
   regHeiVal.textContent = '-';
   regWatertightVal.textContent = 'Not Checked';
+  regCfdScaleVal.textContent = 'Not Checked';
   regSummary.textContent = 'No geometry loaded';
   regSummary.className = 'reg-summary-box';
   document.querySelectorAll('.reg-item').forEach(el => el.className = 'reg-item');
@@ -805,8 +808,38 @@ function computeStats(geometry, size) {
     regHei.className = 'reg-item fail';
   }
 
+  // CFD Scale Check (Meters)
+  const unitSelect = document.getElementById('unit-select');
+  const selectedUnit = unitSelect ? unitSelect.value : 'm';
+  
+  let scaleStatus = 'pass';
+  let scaleReason = 'Pass';
+  
+  if (selectedUnit !== 'm') {
+    scaleStatus = 'fail';
+    scaleReason = `Warning: Model unit is ${selectedUnit.toUpperCase()}. CFD solver requires model to be in meters.`;
+  } else {
+    // If unit is meters, check if dimensions look like mm (e.g. length > 10m)
+    if (l > 10000 || w > 10000 || h > 10000) {
+      scaleStatus = 'fail';
+      scaleReason = 'Warning: Model dimensions look too large. Raw STL coordinates are likely in millimeters instead of meters.';
+    } else {
+      scaleReason = 'Pass (Verified)';
+    }
+  }
+  
+  if (regCfdScale && regCfdScaleVal) {
+    regCfdScaleVal.textContent = scaleReason;
+    if (scaleStatus === 'pass') {
+      regCfdScale.className = 'reg-item pass';
+    } else {
+      regCfdScale.className = 'reg-item fail';
+    }
+  }
+
   // Overall regulations validation summary
-  if (l <= 2400 && w <= 900 && isWatertight) {
+  const isScaleOk = (scaleStatus === 'pass');
+  if (l <= 2400 && w <= 900 && isWatertight && isScaleOk) {
     regSummary.textContent = 'PASSED F24 DIMENSIONAL LIMITS';
     regSummary.className = 'reg-summary-box pass';
   } else {
@@ -814,6 +847,7 @@ function computeStats(geometry, size) {
     if (l > 2400) reasons.push('Length exceeds limit');
     if (w > 900) reasons.push('Width exceeds limit');
     if (!isWatertight) reasons.push('Mesh not watertight');
+    if (!isScaleOk) reasons.push('CFD scale not in meters');
     regSummary.textContent = 'FAILED RULES: ' + reasons.join(' & ');
     regSummary.className = 'reg-summary-box fail';
   }
