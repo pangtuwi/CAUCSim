@@ -632,10 +632,12 @@ aws s3 cp "s3://\$S3_BUCKET/\$STL_KEY" constant/geometry/Basic_F24.stl
 # Notify API Server: Starting meshing
 update_job_status "running" "mesh_generation"
 
-# Load OpenFOAM environment
+# Load OpenFOAM environment (disable set -e temporarily to ignore harmless shell context warnings)
 export OMPI_ALLOW_RUN_AS_ROOT=1 
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+set +e
 source /opt/openfoam13/etc/bashrc
+set -e
 
 # Run execution pipeline
 echo "==> Running OpenFOAM pipeline..."
