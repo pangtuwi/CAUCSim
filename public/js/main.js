@@ -552,6 +552,10 @@ function onWindowResize() {
 
 // --- STL Loading & Calculations ---
 function loadSTL(originalName, viewUrl, fileKey) {
+  if (fileKey !== activeFileKey) {
+    clearCfdRun();
+  }
+
   activeFilename = originalName;
   activeUrl = viewUrl;
   activeFileKey = fileKey;
