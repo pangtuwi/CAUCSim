@@ -598,20 +598,19 @@ function loadSTL(originalName, viewUrl, fileKey) {
       const maxDimUnit = Math.max(tempSize.x, tempSize.y, tempSize.z);
 
       const unitSelect = document.getElementById('unit-select');
-      const selectedUnit = unitSelect ? unitSelect.value : 'auto';
-      let shouldScaleToMM = false;
+      const selectedUnit = unitSelect ? unitSelect.value : 'm';
+      let scaleFactor = 1.0;
 
-      if (selectedUnit === 'auto') {
-        // If the longest dimension is less than 15 units (e.g. 2.7m), assume meters
-        if (maxDimUnit < 15) {
-          shouldScaleToMM = true;
-        }
-      } else if (selectedUnit === 'm') {
-        shouldScaleToMM = true;
+      if (selectedUnit === 'm' || selectedUnit === 'auto') {
+        scaleFactor = 1000.0;
+      } else if (selectedUnit === 'cm') {
+        scaleFactor = 10.0;
+      } else if (selectedUnit === 'in') {
+        scaleFactor = 25.4;
       }
 
-      if (shouldScaleToMM) {
-        geometry.scale(1000, 1000, 1000);
+      if (scaleFactor !== 1.0) {
+        geometry.scale(scaleFactor, scaleFactor, scaleFactor);
       }
 
       activeGeometry = geometry;
