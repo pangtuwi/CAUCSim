@@ -413,6 +413,21 @@ const runSimulatedJob = async (jobId, frontalArea) => {
   const liftForce = (0.5 * 1.225 * Math.pow(raceSpeed, 2) * cla).toFixed(1);
   const aeroPower = (dragForce * raceSpeed).toFixed(0);
 
+  cumulativeLog += '==> Simulation completed successfully!\n=============================================\n';
+  cumulativeLog += `Cd            : ${cd}\nCl            : ${cl}\nCm            : ${cm}\nCdA           : ${cda} m²\nClA           : ${cla} m²\n`;
+  cumulativeLog += `At race speed (${raceSpeed} m/s):\n`;
+  cumulativeLog += `  Drag force  : ${dragForce} N\n  Lift force  : ${liftForce} N\n  Aero power  : ${aeroPower} W\n=============================================\n`;
+  
+  await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
+  await saveJobFile(jobId, 'results.zip', Buffer.from('mock results zip content'), 'application/zip');
+
+  // Copy a default flow_slice.png image from public assets for local mock mode visualisation
+  const mockPngSrc = path.join(__dirname, 'public', 'sandbach_high.png');
+  if (fs.existsSync(mockPngSrc)) {
+    const pngContent = fs.readFileSync(mockPngSrc);
+    await saveJobFile(jobId, 'flow_slice.png', pngContent, 'image/png');
+  }
+
   jobState.status = 'completed';
   jobState.stage = 'completed';
   jobState.completedAt = new Date().toISOString();
@@ -429,21 +444,6 @@ const runSimulatedJob = async (jobId, frontalArea) => {
   };
 
   await saveJobState(jobId, jobState);
-
-  cumulativeLog += '==> Simulation completed successfully!\n=============================================\n';
-  cumulativeLog += `Cd            : ${cd}\nCl            : ${cl}\nCm            : ${cm}\nCdA           : ${cda} m²\nClA           : ${cla} m²\n`;
-  cumulativeLog += `At race speed (${raceSpeed} m/s):\n`;
-  cumulativeLog += `  Drag force  : ${dragForce} N\n  Lift force  : ${liftForce} N\n  Aero power  : ${aeroPower} W\n=============================================\n`;
-  
-  await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
-  await saveJobFile(jobId, 'results.zip', Buffer.from('mock results zip content'), 'application/zip');
-
-  // Copy a default flow_slice.png image from public assets for local mock mode visualisation
-  const mockPngSrc = path.join(__dirname, 'public', 'sandbach_high.png');
-  if (fs.existsSync(mockPngSrc)) {
-    const pngContent = fs.readFileSync(mockPngSrc);
-    await saveJobFile(jobId, 'flow_slice.png', pngContent, 'image/png');
-  }
 };
 
 // 1. POST /api/jobs: Queue/start simulation
