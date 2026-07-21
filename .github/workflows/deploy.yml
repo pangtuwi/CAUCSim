@@ -33,3 +33,11 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          DIGITALOCEAN_PROJECT_ID: ${{ secrets.DIGITALOCEAN_PROJECT_ID }}
+          DIGITALOCEAN_SSH_KEY_FP: ${{ secrets.DIGITALOCEAN_SSH_KEY_FP }}
+          DIGITALOCEAN_SNAPSHOT_NAME: ${{ secrets.DIGITALOCEAN_SNAPSHOT_NAME }}
+          DIGITALOCEAN_REGION: ${{ secrets.DIGITALOCEAN_REGION }}
+          DIGITALOCEAN_SIZE: ${{ secrets.DIGITALOCEAN_SIZE }}
+          APP_CALLBACK_URL: ${{ secrets.APP_CALLBACK_URL }}

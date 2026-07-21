@@ -257,6 +257,30 @@ describe('CAUCSim API Tests (Mock Mode & Auth)', () => {
       expect(response.status).toBe(404);
     });
 
+    it('should return 404 for visualisation of a non-existent job', async () => {
+      const response = await request(app)
+        .get('/api/jobs/non-existent-job/visualisation')
+        .set('Authorization', authHeaderValue);
+      expect(response.status).toBe(404);
+    });
+
+    it('should retrieve job visualisation if it exists', async () => {
+      // Manually write a mock flow_slice.png to the job folder
+      const resultsFolder = path.join(uploadDir, 'results', testJobId);
+      if (!fs.existsSync(resultsFolder)) {
+        fs.mkdirSync(resultsFolder, { recursive: true });
+      }
+      fs.writeFileSync(path.join(resultsFolder, 'flow_slice.png'), 'mock png data');
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/visualisation`)
+        .set('Authorization', authHeaderValue);
+      
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/^image\/png/);
+      expect(response.body.toString()).toBe('mock png data');
+    });
+
     it('should clean up test job files', () => {
       const resultsFolder = path.join(uploadDir, 'results', testJobId);
       if (fs.existsSync(resultsFolder)) {

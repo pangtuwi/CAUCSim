@@ -9,6 +9,15 @@ provider:
   apiGateway:
     binaryMediaTypes:
       - '*/*'
+  environment:
+    S3_BUCKET_NAME: ${env:S3_BUCKET_NAME, ''}
+    DIGITALOCEAN_TOKEN: ${env:DIGITALOCEAN_TOKEN, ''}
+    DIGITALOCEAN_PROJECT_ID: ${env:DIGITALOCEAN_PROJECT_ID, ''}
+    DIGITALOCEAN_SSH_KEY_FP: ${env:DIGITALOCEAN_SSH_KEY_FP, ''}
+    DIGITALOCEAN_SNAPSHOT_NAME: ${env:DIGITALOCEAN_SNAPSHOT_NAME, 'openfoam-base'}
+    DIGITALOCEAN_REGION: ${env:DIGITALOCEAN_REGION, 'lon1'}
+    DIGITALOCEAN_SIZE: ${env:DIGITALOCEAN_SIZE, 'gd-16vcpu-64gb'}
+    APP_CALLBACK_URL: ${env:APP_CALLBACK_URL, ''}
 
 functions:
   api:

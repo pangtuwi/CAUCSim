@@ -437,6 +437,13 @@ const runSimulatedJob = async (jobId, frontalArea) => {
   
   await saveJobFile(jobId, 'simulation.log', cumulativeLog, 'text/plain');
   await saveJobFile(jobId, 'results.zip', Buffer.from('mock results zip content'), 'application/zip');
+
+  // Copy a default flow_slice.png image from public assets for local mock mode visualisation
+  const mockPngSrc = path.join(__dirname, 'public', 'sandbach_high.png');
+  if (fs.existsSync(mockPngSrc)) {
+    const pngContent = fs.readFileSync(mockPngSrc);
+    await saveJobFile(jobId, 'flow_slice.png', pngContent, 'image/png');
+  }
 };
 
 // 1. POST /api/jobs: Queue/start simulation
@@ -691,6 +698,19 @@ aws s3 cp results.zip "s3://\$S3_BUCKET/results/\$JOB_ID/results.zip"
 aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log"
 if [ -f postProcessing/forceCoeffs/0/forceCoeffs.dat ]; then
   aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://\$S3_BUCKET/results/\$JOB_ID/forceCoeffs.dat"
+fi
+
+# Find and upload flow visualisation slice image
+echo "==> Searching for flow slice image..."
+FLOW_IMAGE=\$(find postProcessing/centerSliceImage -name "flow_slice*.png" | sort -V | tail -n 1)
+if [ -z "\$FLOW_IMAGE" ] || [ ! -f "\$FLOW_IMAGE" ]; then
+  FLOW_IMAGE=\$(find . -name "flow_slice*.png" | sort -V | tail -n 1)
+fi
+if [ -n "\$FLOW_IMAGE" ] && [ -f "\$FLOW_IMAGE" ]; then
+  echo "==> Found flow slice image: \$FLOW_IMAGE"
+  aws s3 cp "\$FLOW_IMAGE" "s3://\$S3_BUCKET/results/\$JOB_ID/flow_slice.png" --content-type "image/png"
+else
+  echo "==> Flow slice image not found."
 fi
 
 # Calculate force coefficients and compile aerodynamic metrics
@@ -1017,6 +1037,30 @@ app.get('/api/jobs/:id/download', requireAuth, async (req, res) => {
       res.redirect(url);
     } catch (err) {
       res.status(500).json({ error: 'Failed to generate results download URL' });
+    }
+  }
+});
+
+// 7. GET /api/jobs/:id/visualisation: Redirect or serve flow_slice.png
+app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  if (useMockS3) {
+    const imgPath = path.join(uploadDir, 'results', jobId, 'flow_slice.png');
+    if (!fs.existsSync(imgPath)) {
+      return res.status(404).json({ error: 'Flow visualisation not found' });
+    }
+    return res.sendFile(imgPath);
+  } else {
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: `results/${jobId}/flow_slice.png`
+      });
+      const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+      res.redirect(url);
+    } catch (err) {
+      console.error("Failed to generate S3 URL for flow slice:", err);
+      res.status(500).json({ error: 'Failed to generate visualisation download URL' });
     }
   }
 });

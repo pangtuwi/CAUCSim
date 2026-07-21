@@ -20,6 +20,7 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **CdA (Drag Area) Calculator:** Input an assumed Drag Coefficient ($C_d$) to instantly calculate the aerodynamic drag area ($CdA$).
 - **F24 Regulations Checklist:** Automatically validates model length ($\le 2400$ mm) and width ($\le 900$ mm) constraints, as well as mesh watertightness/closure.
 - **CFD Metric Scale Check:** Validates model dimensions and flags warnings if coordinates suggest a millimeter-to-meter scaling mismatch, preventing OpenFOAM solver divergence.
+- **Centerline Flow Visualisation:** Displays a centerline velocity magnitude slice (\(Y = 0\) plane) rendered directly by OpenFOAM's `runTimePostProcessing` VTK/Mesa function object at the end of the simulation.
 
 ### 3. Serverless Storage Architecture (AWS S3)
 - **Direct-to-S3 Uploads:** Eliminates `multer` and multipart/form parsing. The Express server generates cryptographically signed PUT/GET URLs via the `@aws-sdk/s3-request-presigner` and the client PUTs the binary payload directly to AWS S3.
@@ -80,4 +81,4 @@ Open [http://localhost:3000](http://localhost:3000) in your web browser.
 When deploying the Express application as a serverless Lambda:
 - Do not pack your `.env` file containing credentials.
 - Assign an **IAM Execution Role** to the Lambda function containing read/write permissions for your S3 bucket. The AWS SDK will automatically assume this role to request S3 credentials securely.
-- Define `S3_BUCKET_NAME` and `AWS_REGION` in the Lambda Environment Variables console configuration.
+- Define `S3_BUCKET_NAME`, `AWS_REGION`, and the DigitalOcean configuration keys (`DIGITALOCEAN_TOKEN`, `DIGITALOCEAN_PROJECT_ID`, etc.) as **GitHub Secrets** when deploying via GitHub Actions, or configure them directly in the AWS Lambda Environment Variables console. These are mapped in `serverless.yaml` and `.github/workflows/deploy.yml` to automate their injection during deployment.

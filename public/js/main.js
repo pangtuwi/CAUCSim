@@ -360,6 +360,11 @@ window.addEventListener('resize', () => {
 function resetActiveGeometry() {
   clearActiveGeometry();
   
+  const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
+  if (btnAnalyseGeometry) {
+    btnAnalyseGeometry.disabled = true;
+  }
+  
   viewportPlaceholder.style.display = 'flex';
   dimensionLabels.style.display = 'none';
   activeModelTitle.textContent = 'No Geometry Loaded';
@@ -586,9 +591,13 @@ function loadSTL(originalName, viewUrl, fileKey) {
   if (detailsLoaded) detailsLoaded.style.display = 'block';
   if (metaFilename) metaFilename.textContent = originalName;
 
-  // Unlock and switch to Stage 2
+  // Unlock Stage 2 but stay on Stage 1
   unlockStage(2);
-  switchStage(2);
+  const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
+  if (btnAnalyseGeometry) {
+    btnAnalyseGeometry.disabled = false;
+  }
+  switchStage(1);
 
   const loader = new STLLoader();
   
@@ -1311,6 +1320,14 @@ function bindEvents() {
     }
   });
 
+  // Analyse Geometry button listener
+  const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
+  if (btnAnalyseGeometry) {
+    btnAnalyseGeometry.addEventListener('click', () => {
+      switchStage(2);
+    });
+  }
+
   // Initialize CFD Runner
   initCfdRunner();
 }
@@ -1585,6 +1602,7 @@ function showAuthError(msg) {
 let cfdPollInterval = null;
 let activeJobId = localStorage.getItem('caucsim_active_job_id') || null;
 let isConsoleCollapsed = false;
+let activeFlowImageUrl = null;
 
 function showCfdMonitor(show) {
   const el = document.getElementById('cfd-monitor');
@@ -1823,9 +1841,55 @@ function updateCfdMonitorState(job) {
   updateEngineStatus(job);
 }
 
+async function fetchFlowVisualisation(jobId) {
+  const imgEl = document.getElementById('flow-visualisation-img');
+  const placeholderEl = document.getElementById('flow-visualisation-placeholder');
+  const loadingEl = document.getElementById('flow-visualisation-loading');
+  
+  if (!imgEl || !placeholderEl || !loadingEl) return;
+  
+  // Revoke previous URL to prevent memory leaks
+  if (activeFlowImageUrl) {
+    URL.revokeObjectURL(activeFlowImageUrl);
+    activeFlowImageUrl = null;
+  }
+  
+  imgEl.src = '';
+  imgEl.style.display = 'none';
+  placeholderEl.style.display = 'none';
+  loadingEl.style.display = 'flex';
+  
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/visualisation`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || 'mock-session-token'}`
+      }
+    });
+    
+    if (res.ok) {
+      const blob = await res.blob();
+      activeFlowImageUrl = URL.createObjectURL(blob);
+      imgEl.src = activeFlowImageUrl;
+      imgEl.style.display = 'block';
+      loadingEl.style.display = 'none';
+    } else {
+      loadingEl.style.display = 'none';
+      placeholderEl.style.display = 'flex';
+    }
+  } catch (err) {
+    console.error("Failed to load flow visualisation:", err);
+    loadingEl.style.display = 'none';
+    placeholderEl.style.display = 'flex';
+  }
+}
+
 function displayCfdResults(job) {
   showCfdMonitor(false);
   showCfdResults(true);
+  
+  if (job && job.jobId) {
+    fetchFlowVisualisation(job.jobId);
+  }
   
   const m = job.metrics;
   if (!m) return;
@@ -1891,6 +1955,21 @@ function clearCfdRun() {
   showCfdResults(false);
   updateEngineStatus(null);
   
+  // Clear flow visualization state
+  const imgEl = document.getElementById('flow-visualisation-img');
+  const placeholderEl = document.getElementById('flow-visualisation-placeholder');
+  const loadingEl = document.getElementById('flow-visualisation-loading');
+  if (imgEl && placeholderEl && loadingEl) {
+    imgEl.src = '';
+    imgEl.style.display = 'none';
+    loadingEl.style.display = 'none';
+    placeholderEl.style.display = 'flex';
+  }
+  if (activeFlowImageUrl) {
+    URL.revokeObjectURL(activeFlowImageUrl);
+    activeFlowImageUrl = null;
+  }
+  
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
     consoleEl.textContent = '';
@@ -1933,6 +2012,11 @@ function clearCfdRun() {
       </svg>
         Run CFD Simulation
     `;
+  }
+
+  const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
+  if (btnAnalyseGeometry) {
+    btnAnalyseGeometry.disabled = !activeFileKey;
   }
 }
 
@@ -2023,7 +2107,11 @@ function initCfdRunner() {
     });
   } else if (activeFileKey) {
     unlockStage(2);
-    switchStage(2);
+    const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
+    if (btnAnalyseGeometry) {
+      btnAnalyseGeometry.disabled = false;
+    }
+    switchStage(1);
   } else {
     switchStage(1);
   }
