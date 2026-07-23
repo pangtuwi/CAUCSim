@@ -742,7 +742,6 @@ function loadSTL(originalName, viewUrl, fileKey) {
       // Progress handler
       if (xhr.lengthComputable) {
         const percent = Math.round((xhr.loaded / xhr.total) * 100);
-        activeModelTitle.innerHTML = `Parsing geometry: ${percent}%...`;
         if (metaStatusText) metaStatusText.textContent = `Loading (${percent}%)...`;
       } else {
         if (metaStatusText) metaStatusText.textContent = 'Loading...';

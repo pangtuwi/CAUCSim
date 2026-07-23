@@ -262,6 +262,7 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       // Extract token from mock S3 state
       const stateFile = JSON.parse(mockInMemoryS3[`results/${testJobId}/job.json`].toString());
       testJobToken = stateFile.jobToken;
+      expect(stateFile).toHaveProperty('frontalArea', 0.16);
     });
 
     it('should list jobs from S3', async () => {

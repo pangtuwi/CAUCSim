@@ -245,6 +245,7 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
   const jobId = `job-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
   const jobToken = crypto.randomBytes(16).toString('hex');
   const originalName = fileKey.substring(fileKey.indexOf('_') + 1);
+  const cleanFrontalArea = typeof frontalArea === 'number' && !isNaN(frontalArea) && frontalArea > 0 ? frontalArea : null;
 
   const initialJobState = {
     jobId,
@@ -258,7 +259,8 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     completedAt: null,
     dropletId: null,
     jobToken,
-    metrics: null
+    metrics: null,
+    frontalArea: cleanFrontalArea
   };
 
   try {
@@ -311,6 +313,10 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
 
     // Compile Cloud-Init (User Data Script)
     const callbackUrl = process.env.APP_CALLBACK_URL || `${req.protocol}://${req.get('host')}`;
+    let sessionTokenLine = '';
+    if (process.env.AWS_SESSION_TOKEN) {
+      sessionTokenLine = `export AWS_SESSION_TOKEN="${process.env.AWS_SESSION_TOKEN}"`;
+    }
     const userDataScript = `#!/bin/bash
 set -e
 exec > >(tee -ia /var/log/cloud-init-output.log) 2>&1
@@ -322,10 +328,12 @@ S3_BUCKET="${bucketName}"
 STL_KEY="${cleanFileKey}"
 TEMPLATE_KEY="case-template.zip"
 AWS_REGION="${region}"
+FRONTAL_AREA="${cleanFrontalArea !== null ? cleanFrontalArea : ''}"
 
 # Export AWS credentials immediately so all subshells/background loops inherit them
 export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
 export AWS_SECRET_ACCESS_KEY="${process.env.AWS_SECRET_ACCESS_KEY || ''}"
+${sessionTokenLine}
 export AWS_DEFAULT_REGION="\$AWS_REGION"
 
 # Start background safety self-destruct timer (1 hour = 3600s)
@@ -362,25 +370,50 @@ update_job_status() {
   aws s3 cp "s3://\$S3_BUCKET/results/\$JOB_ID/job.json" current_job.json || echo '{"jobId":"'\$JOB_ID'"}' > current_job.json
   
   python3 -c "
-import json
+import json, sys, time
+status = sys.argv[1]
+stage = sys.argv[2]
+error = sys.argv[3]
+metrics_str = sys.argv[4]
+
 try:
     with open('current_job.json', 'r') as f:
         data = json.load(f)
 except Exception:
     data = {}
-data['status'] = '\$status'
-data['stage'] = '\$stage'
-data['updatedAt'] = '\$(date -u +%Y-%m-%dT%H:%M:%SZ)'
-if '\$error':
-    data['error'] = '\$error'
-if '\$metrics':
+
+data['status'] = status
+data['stage'] = stage
+data['updatedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+if error:
+    data['error'] = error
+else:
+    data.pop('error', None)
+
+if metrics_str:
     try:
-        data['metrics'] = json.loads('''\$metrics''')
+        data['metrics'] = json.loads(metrics_str)
     except Exception as e:
         data['error'] = 'Failed to parse metrics: ' + str(e)
+
 with open('updated_job.json', 'w') as f:
     json.dump(data, f, indent=2)
-"
+
+# Generate callback payload
+callback_data = {'status': status, 'stage': stage}
+if error:
+    callback_data['error'] = error
+if metrics_str:
+    try:
+        callback_data['metrics'] = json.loads(metrics_str)
+    except Exception:
+        pass
+
+with open('callback.json', 'w') as f:
+    json.dump(callback_data, f)
+" "\$status" "\$stage" "\$error" "\$metrics"
+
   # Push updated state file back to S3
   aws s3 cp updated_job.json "s3://\$S3_BUCKET/results/\$JOB_ID/job.json" --content-type "application/json" || true
   
@@ -388,7 +421,7 @@ with open('updated_job.json', 'w') as f:
   curl -s -X POST "\$CALLBACK_URL" \\
        -H "Content-Type: application/json" \\
        -H "X-Job-Token: \$JOB_TOKEN" \\
-       -d "{\\"status\\": \\"\$status\\", \\"stage\\": \\"\$stage\\" \$( [ -n \\"\$error\\" ] && echo \\", \\\\\\\"error\\\\\\\": \\\\\\\"\$error\\\\\\\"\\" || echo \\"\\" ) \$( [ -n \\"\$metrics\\" ] && echo \\", \\\\\\\"metrics\\\\\\\": \$metrics\\" || echo \\"\\" )}" || true
+       -d @callback.json || true
 }
 
 # Install zip, unzip and curl utilities immediately on boot
@@ -418,6 +451,12 @@ aws s3 cp "s3://\$S3_BUCKET/\$TEMPLATE_KEY" ./template.zip
 echo "==> Extracting case template..."
 unzip -o template.zip
 rm template.zip
+
+# Update frontal area (Aref) in system/forceCoeffs if provided
+if [ -n "$FRONTAL_AREA" ]; then
+  echo "==> Updating Aref in system/forceCoeffs to $FRONTAL_AREA..."
+  sed -i "s|Aref[[:space:]]\{1,\}[0-9.]\{1,\};|Aref            \$FRONTAL_AREA;|g" system/forceCoeffs
+fi
 
 # Adjust Allrun shebang to bash and insert solver status update
 sed -i '1s|#!/bin/sh|#!/bin/bash|' Allrun
