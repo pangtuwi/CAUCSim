@@ -17,8 +17,7 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 
 ### 2. Aerodynamic Analytics
 - **Projected Frontal Area:** Uses an optimized 2D grid rasterization algorithm on the Y-Z plane to compute the exact projected frontal area ($m^2$) of the vehicle in under 15ms.
-- **CdA (Drag Area) Calculator:** Input an assumed Drag Coefficient ($C_d$) to instantly calculate the aerodynamic drag area ($CdA$).
-- **F24 Regulations Checklist:** Automatically validates model length ($\le 2400$ mm) and width ($\le 900$ mm) constraints, as well as mesh watertightness/closure.
+- **F24 Regulations Checklist:** Automatically validates model length (&le; 2400 mm), width (&le; 900 mm), and height (&le; 1200 mm) constraints, mesh watertightness, proper $X$ coordinate positioning ($[0, \text{Length}]$), $Y$-axis symmetry, and $Z$-axis ground placement (wheels touching or slightly below $Z=0$).
 - **CFD Metric Scale Check:** Validates model dimensions and flags warnings if coordinates suggest a millimeter-to-meter scaling mismatch, preventing OpenFOAM solver divergence.
 - **Centerline Flow Visualisation:** Displays a centerline velocity magnitude slice (\(Y = 0\) plane) rendered directly by OpenFOAM's `runTimePostProcessing` VTK/Mesa function object at the end of the simulation.
 

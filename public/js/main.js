@@ -41,7 +41,6 @@ const libraryList = document.getElementById('library-list');
 const libraryEmpty = document.getElementById('library-empty');
 const searchInput = document.getElementById('library-search-input');
 const refreshBtn = document.getElementById('refresh-library-btn');
-const cdInput = document.getElementById('cd-input');
 const cadViewportContainer = document.getElementById('cad-viewport-container');
 const graphicalResultsPanel = document.getElementById('graphical-results-panel');
 
@@ -61,7 +60,6 @@ const statVertices = document.getElementById('stat-vertices');
 const statVolume = document.getElementById('stat-volume');
 const statSurfaceArea = document.getElementById('stat-surface-area');
 const statFrontalArea = document.getElementById('stat-frontal-area');
-const statCdA = document.getElementById('stat-cda');
 const dimLen = document.getElementById('dim-len');
 const dimWid = document.getElementById('dim-wid');
 const dimHei = document.getElementById('dim-hei');
@@ -78,7 +76,16 @@ const regWatertight = document.getElementById('reg-watertight');
 const regWatertightVal = document.getElementById('reg-watertight-val');
 const regCfdScale = document.getElementById('reg-cfd-scale');
 const regCfdScaleVal = document.getElementById('reg-cfd-scale-val');
+const regPosX = document.getElementById('reg-pos-x');
+const regPosXVal = document.getElementById('reg-pos-x-val');
+const regSymmetryY = document.getElementById('reg-symmetry-y');
+const regSymmetryYVal = document.getElementById('reg-symmetry-y-val');
+const regPosZ = document.getElementById('reg-pos-z');
+const regPosZVal = document.getElementById('reg-pos-z-val');
 const regSummary = document.getElementById('reg-summary');
+const metaStatusContainer = document.getElementById('meta-status-container');
+const metaStatusDot = document.getElementById('meta-status-dot');
+const metaStatusText = document.getElementById('meta-status-text');
 
 // Show login modal immediately if no token exists to prevent dashboard flashing
 if (!idToken) {
@@ -379,7 +386,6 @@ function resetActiveGeometry() {
   statVolume.textContent = '-';
   statSurfaceArea.textContent = '-';
   statFrontalArea.textContent = '-';
-  statCdA.textContent = '-';
   currentFrontalArea = 0;
   dimLen.textContent = '-';
   dimWid.textContent = '-';
@@ -389,6 +395,15 @@ function resetActiveGeometry() {
   regHeiVal.textContent = '-';
   regWatertightVal.textContent = 'Not Checked';
   regCfdScaleVal.textContent = 'Not Checked';
+  if (regPosXVal) regPosXVal.textContent = 'Not Checked';
+  if (regSymmetryYVal) regSymmetryYVal.textContent = 'Not Checked';
+  if (regPosZVal) regPosZVal.textContent = 'Not Checked';
+  if (metaStatusContainer) metaStatusContainer.style.color = 'var(--accent-cyan)';
+  if (metaStatusDot) {
+    metaStatusDot.style.backgroundColor = 'var(--accent-cyan)';
+    metaStatusDot.style.filter = 'drop-shadow(0 0 3px var(--accent-cyan))';
+  }
+  if (metaStatusText) metaStatusText.textContent = 'Loaded & Ready';
   regSummary.textContent = 'No geometry loaded';
   regSummary.className = 'reg-summary-box';
   document.querySelectorAll('.reg-item').forEach(el => el.className = 'reg-item');
@@ -604,6 +619,14 @@ function loadSTL(originalName, viewUrl, fileKey) {
   // Show a loading text in title
   activeModelTitle.innerHTML = `Loading 3D mesh... <span style="font-size:11px; opacity:0.7;">(${originalName})</span>`;
 
+  // Set status indicator to loading state
+  if (metaStatusContainer) metaStatusContainer.style.color = 'var(--warning-color)';
+  if (metaStatusDot) {
+    metaStatusDot.style.backgroundColor = 'var(--warning-color)';
+    metaStatusDot.style.filter = 'drop-shadow(0 0 3px var(--warning-color))';
+  }
+  if (metaStatusText) metaStatusText.textContent = 'Loading...';
+
   loader.load(
     viewUrl,
     (geometry) => {
@@ -706,17 +729,34 @@ function loadSTL(originalName, viewUrl, fileKey) {
 
       // Compute statistics
       computeStats(geometry, size);
+
+      // Set status to Loaded & Ready
+      if (metaStatusContainer) metaStatusContainer.style.color = 'var(--accent-cyan)';
+      if (metaStatusDot) {
+        metaStatusDot.style.backgroundColor = 'var(--accent-cyan)';
+        metaStatusDot.style.filter = 'drop-shadow(0 0 3px var(--accent-cyan))';
+      }
+      if (metaStatusText) metaStatusText.textContent = 'Loaded & Ready';
     },
     (xhr) => {
       // Progress handler
       if (xhr.lengthComputable) {
         const percent = Math.round((xhr.loaded / xhr.total) * 100);
         activeModelTitle.innerHTML = `Parsing geometry: ${percent}%...`;
+        if (metaStatusText) metaStatusText.textContent = `Loading (${percent}%)...`;
+      } else {
+        if (metaStatusText) metaStatusText.textContent = 'Loading...';
       }
     },
     (err) => {
       console.error(err);
       activeModelTitle.textContent = 'Error rendering 3D file';
+      if (metaStatusContainer) metaStatusContainer.style.color = 'var(--danger-color)';
+      if (metaStatusDot) {
+        metaStatusDot.style.backgroundColor = 'var(--danger-color)';
+        metaStatusDot.style.filter = 'drop-shadow(0 0 3px var(--danger-color))';
+      }
+      if (metaStatusText) metaStatusText.textContent = 'Error Loading Mesh';
       alert('Error loading 3D STL file. The file may be corrupted.');
     }
   );
@@ -785,7 +825,7 @@ function computeStats(geometry, size) {
   // Compute Projected Frontal Area (Y-Z plane projection)
   const frontalAreaM2 = calculateFrontalArea(geometry, size);
   statFrontalArea.textContent = frontalAreaM2.toFixed(4);
-  updateCdA(frontalAreaM2);
+  currentFrontalArea = frontalAreaM2;
 
   // Watertight status
   const isWatertight = volumeCm3 > 0.01; // basic validation
@@ -850,9 +890,38 @@ function computeStats(geometry, size) {
     }
   }
 
+  // Geometry alignment and orientation checks
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  const min = geometry.boundingBox.min;
+  const max = geometry.boundingBox.max;
+
+  // 1. X Position Check: model is positioned between x=0 and x=model length
+  const isXAligned = Math.abs(min.x) <= 5.0;
+  if (regPosX && regPosXVal) {
+    regPosXVal.textContent = isXAligned ? `Pass (${min.x.toFixed(1)} mm)` : `Fail (${min.x.toFixed(1)} mm)`;
+    regPosX.className = isXAligned ? 'reg-item pass' : 'reg-item fail';
+  }
+
+  // 2. Y Symmetry Check: model is approximately symmetrical about y (a few mm tolerance)
+  const yCenter = (min.y + max.y) / 2;
+  const isYSymmetrical = Math.abs(yCenter) <= 5.0;
+  if (regSymmetryY && regSymmetryYVal) {
+    regSymmetryYVal.textContent = isYSymmetrical ? `Pass (${Math.abs(yCenter).toFixed(1)} mm offset)` : `Fail (${Math.abs(yCenter).toFixed(1)} mm offset)`;
+    regSymmetryY.className = isYSymmetrical ? 'reg-item pass' : 'reg-item fail';
+  }
+
+  // 3. Z Ground Placement Check: model is above and on z=0 plane (wheels slightly below z=0 but not above)
+  const isZAligned = min.z <= 0.5 && min.z >= -15.0;
+  if (regPosZ && regPosZVal) {
+    regPosZVal.textContent = isZAligned ? `Pass (${min.z.toFixed(1)} mm)` : `Fail (${min.z.toFixed(1)} mm)`;
+    regPosZ.className = isZAligned ? 'reg-item pass' : 'reg-item fail';
+  }
+
   // Overall regulations validation summary
   const isScaleOk = (scaleStatus === 'pass');
-  if (l <= 2400 && w <= 900 && isWatertight && isScaleOk) {
+  if (l <= 2400 && w <= 900 && isWatertight && isScaleOk && isXAligned && isYSymmetrical && isZAligned) {
     regSummary.textContent = 'PASSED F24 DIMENSIONAL LIMITS';
     regSummary.className = 'reg-summary-box pass';
   } else {
@@ -861,6 +930,9 @@ function computeStats(geometry, size) {
     if (w > 900) reasons.push('Width exceeds limit');
     if (!isWatertight) reasons.push('Mesh not watertight');
     if (!isScaleOk) reasons.push('CFD scale not in meters');
+    if (!isXAligned) reasons.push('X position offset');
+    if (!isYSymmetrical) reasons.push('Y asymmetry');
+    if (!isZAligned) reasons.push('Z ground mismatch');
     regSummary.textContent = 'FAILED RULES: ' + reasons.join(' & ');
     regSummary.className = 'reg-summary-box fail';
   }
@@ -926,17 +998,6 @@ function calculateVolume(geometry) {
     volume += (-v321 + v231 + v312 - v132 - v213 + v123) / 6.0;
   }
   return Math.abs(volume);
-}
-
-function updateCdA(frontalAreaM2) {
-  currentFrontalArea = frontalAreaM2;
-  const cdVal = parseFloat(cdInput.value);
-  if (currentFrontalArea > 0 && !isNaN(cdVal)) {
-    const cda = currentFrontalArea * cdVal;
-    statCdA.textContent = cda.toFixed(4) + ' m²';
-  } else {
-    statCdA.textContent = '-';
-  }
 }
 
 function calculateFrontalArea(geometry, size) {
@@ -1305,11 +1366,6 @@ function bindEvents() {
   toggleAxesBtn.addEventListener('click', () => {
     toggleAxesBtn.classList.toggle('active');
     axesHelper.visible = toggleAxesBtn.classList.contains('active');
-  });
-
-  // Cd input change listener
-  cdInput.addEventListener('input', () => {
-    updateCdA(currentFrontalArea);
   });
 
   // Unit Mode Selector change
@@ -1711,6 +1767,18 @@ function stopCfdPolling() {
   }
 }
 
+// Helper to scroll the CFD console robustly to the bottom
+function scrollConsoleToBottom(consoleEl) {
+  if (!consoleEl) return;
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+  requestAnimationFrame(() => {
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  });
+  setTimeout(() => {
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }, 50);
+}
+
 async function fetchCfdLogs() {
   if (!activeJobId) return;
   try {
@@ -1724,9 +1792,7 @@ async function fetchCfdLogs() {
       const consoleEl = document.getElementById('cfd-console');
       if (consoleEl) {
         consoleEl.textContent = logText;
-        setTimeout(() => {
-          consoleEl.scrollTop = consoleEl.scrollHeight;
-        }, 10);
+        scrollConsoleToBottom(consoleEl);
       }
     }
   } catch (e) {
@@ -1836,16 +1902,15 @@ async function fetchFlowVisualisation(jobId) {
   loadingEl.style.display = 'flex';
   
   try {
-    const res = await fetch(`/api/jobs/${jobId}/visualisation`, {
+    const res = await fetch(`/api/jobs/${jobId}/visualisation?json=true`, {
       headers: {
         'Authorization': `Bearer ${idToken || ''}`
       }
     });
     
     if (res.ok) {
-      const blob = await res.blob();
-      activeFlowImageUrl = URL.createObjectURL(blob);
-      imgEl.src = activeFlowImageUrl;
+      const data = await res.json();
+      imgEl.src = data.url;
       imgEl.style.display = 'block';
       loadingEl.style.display = 'none';
     } else {
@@ -1909,6 +1974,7 @@ function displayFailedCfdState(job) {
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
     consoleEl.textContent += `\n\n[ERROR] CFD Simulation failed: ${job.error || 'Unknown Error'}\n`;
+    scrollConsoleToBottom(consoleEl);
   }
   
   const btnRunCfd = document.getElementById('btn-run-cfd');
@@ -2017,6 +2083,7 @@ function initCfdRunner() {
       } else {
         consoleEl.style.display = 'block';
         btnToggleConsole.textContent = 'Collapse';
+        scrollConsoleToBottom(consoleEl);
       }
     });
   }
@@ -2034,14 +2101,15 @@ function initCfdRunner() {
         downloadLnk.style.pointerEvents = 'none';
         downloadLnk.style.opacity = '0.5';
         
-        const res = await fetch(`/api/jobs/${activeJobId}/download`, {
+        const res = await fetch(`/api/jobs/${activeJobId}/download?json=true`, {
           headers: {
             'Authorization': `Bearer ${idToken || ''}`
           }
         });
         
         if (res.ok) {
-          window.open(res.url, '_blank');
+          const data = await res.json();
+          window.open(data.url, '_blank');
         } else {
           alert("Failed to retrieve download URL.");
         }

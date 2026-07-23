@@ -30,7 +30,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.18</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.19</span></p>
         </div>
       </div>
       
@@ -127,10 +127,6 @@
             <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
               Review model dimensions and verify regulations checklist on the right.
             </p>
-            <div class="drag-calc-row" style="background: rgba(0, 0, 0, 0.2); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03); display: flex; justify-content: space-between; align-items: center;">
-              <label for="cd-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Assumed C<sub>d</sub>:</label>
-              <input type="number" id="cd-input" value="0.30" step="0.01" min="0.05" max="1.50" class="select-field" style="width: 45%; text-align: center; font-family: var(--font-mono); font-size: 11px;">
-            </div>
           </div>
         </div>
 
@@ -306,9 +302,9 @@
                 </div>
                 <div class="detail-row" style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
                   <span class="detail-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Status</span>
-                  <span class="detail-val" style="font-size: 12px; font-weight: 600; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 6px;">
-                    <span class="status-indicator online" style="width: 8px; height: 8px; display: inline-block; filter: drop-shadow(0 0 3px var(--accent-cyan));"></span>
-                    Loaded & Ready
+                  <span class="detail-val" id="meta-status-container" style="font-size: 12px; font-weight: 600; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 6px;">
+                    <span id="meta-status-dot" style="width: 8px; height: 8px; display: inline-block; border-radius: 50%; background-color: var(--accent-cyan); filter: drop-shadow(0 0 3px var(--accent-cyan));"></span>
+                    <span id="meta-status-text">Loaded & Ready</span>
                   </span>
                 </div>
 
@@ -358,10 +354,6 @@
                 <span class="value" id="stat-frontal-area" style="font-size: 22px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono);">-</span>
                 <span class="unit" style="font-size: 12px; color: var(--text-secondary);">m²</span>
               </div>
-              <div class="drag-result" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 8px;">
-                <span style="color: var(--text-secondary); font-weight: 500;">CdA (Drag Area):</span>
-                <span id="stat-cda" style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 700; font-size: 13px; text-shadow: 0 0 6px var(--accent-cyan-glow);">-</span>
-              </div>
             </div>
           </section>
 
@@ -407,6 +399,30 @@
                 <div class="reg-details">
                   <span class="name">CFD Scale Check (Meters)</span>
                   <span class="value" id="reg-cfd-scale-val">Not Checked</span>
+                </div>
+              </div>
+
+              <div class="reg-item" id="reg-pos-x">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">X Position (0 to L)</span>
+                  <span class="value" id="reg-pos-x-val">Not Checked</span>
+                </div>
+              </div>
+
+              <div class="reg-item" id="reg-symmetry-y">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Y Symmetry Check</span>
+                  <span class="value" id="reg-symmetry-y-val">Not Checked</span>
+                </div>
+              </div>
+
+              <div class="reg-item" id="reg-pos-z">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Z Ground Plane Check</span>
+                  <span class="value" id="reg-pos-z-val">Not Checked</span>
                 </div>
               </div>
             </div>

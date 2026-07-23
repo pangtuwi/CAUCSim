@@ -778,7 +778,11 @@ app.get('/api/jobs/:id/download', requireAuth, async (req, res) => {
       Key: `results/${jobId}/results.zip`
     });
     const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-    res.redirect(url);
+    if (req.query.json === 'true') {
+      res.json({ url });
+    } else {
+      res.redirect(url);
+    }
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate results download URL' });
   }
@@ -797,7 +801,11 @@ app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
       Key: `results/${jobId}/flow_slice.png`
     });
     const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
-    res.redirect(url);
+    if (req.query.json === 'true') {
+      res.json({ url });
+    } else {
+      res.redirect(url);
+    }
   } catch (err) {
     console.error("Failed to generate S3 URL for flow slice:", err);
     res.status(500).json({ error: 'Failed to generate visualisation download URL' });
