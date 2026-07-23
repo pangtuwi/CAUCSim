@@ -16,6 +16,14 @@ const port = process.env.PORT || 3000;
 // Enable JSON body parsing for API requests
 app.use(express.json());
 
+// Disable caching for all API endpoints
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // Detect if running in AWS Lambda vs local machine
 const isLambda = !!process.env.LAMBDA_TASK_ROOT;
 
@@ -76,7 +84,11 @@ const requireAuth = async (req, res, next) => {
     };
     next();
   } catch (err) {
-    console.error("JWT Verification failed:", err.message);
+    if (err.message && err.message.includes('expired')) {
+      console.log(`JWT Verification: Token expired (${err.message})`);
+    } else {
+      console.error("JWT Verification failed:", err.message);
+    }
     res.status(401).json({ error: "Unauthorized: Invalid token" });
   }
 };

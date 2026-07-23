@@ -1206,6 +1206,10 @@ async function uploadFile(file) {
       body: JSON.stringify({ filename: file.name, fileType: file.type || 'application/octet-stream' })
     });
     
+    if (response.status === 401) {
+      handleLogout();
+      return;
+    }
     if (!response.ok) throw new Error('Failed to generate presigned upload URL');
     const { uploadUrl, viewUrl, fileKey } = await response.json();
 
@@ -1675,6 +1679,10 @@ async function startCfdSimulation() {
       })
     });
     
+    if (response.status === 401) {
+      handleLogout();
+      return;
+    }
     if (!response.ok) {
       const err = await response.json();
       throw new Error(err.error || 'Failed to start CFD simulation');
@@ -1732,6 +1740,11 @@ async function pollCfdStatus() {
     });
     
     if (!response.ok) {
+      if (response.status === 401) {
+        stopCfdPolling();
+        handleLogout();
+        return;
+      }
       if (response.status === 404) {
         stopCfdPolling();
         clearCfdRun();
@@ -1786,6 +1799,11 @@ async function fetchCfdLogs() {
         'Authorization': `Bearer ${idToken || ''}`
       }
     });
+    if (res.status === 401) {
+      stopCfdPolling();
+      handleLogout();
+      return;
+    }
     if (res.ok) {
       const logText = await res.text();
       const consoleEl = document.getElementById('cfd-console');
