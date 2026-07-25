@@ -8,74 +8,57 @@
 FoamFile
 {
     format      ascii;
-    class       dictionary;
-    object      blockMeshDict;
+    class       volScalarField;
+    location    "0";
+    object      nut;
 }
-
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-convertToMeters 1;
+dimensions      [0 2 -1 0 0 0 0];
 
-vertices
-(
-    (-5 -4 0)
-    (15 -4 0)
-    (15  4 0)
-    (-5  4 0)
-    (-5 -4 8)
-    (15 -4 8)
-    (15  4 8)
-    (-5  4 8)
-);
+internalField   uniform 0;
 
-blocks
-(
-    hex (0 1 2 3 4 5 6 7) (20 8 8) simpleGrading (1 1 1)
-);
+boundaryField
+{
+    //- Set patchGroups for constraint patches
+    #includeEtc "caseDicts/setConstraintTypes"
 
-boundary
-(
     frontAndBack
     {
-        type patch;
-        faces
-        (
-            (3 7 6 2)
-            (1 5 4 0)
-        );
+        type            calculated;
+        value           uniform 0;
     }
+
     inlet
     {
-        type patch;
-        faces
-        (
-            (0 4 7 3)
-        );
+        type            calculated;
+        value           uniform 0;
     }
+
     outlet
     {
-        type patch;
-        faces
-        (
-            (2 6 5 1)
-        );
+        type            calculated;
+        value           uniform 0;
     }
+
     lowerWall
     {
-        type wall;
-        faces
-        (
-            (0 3 2 1)
-        );
+        type            nutkWallFunction;
+        value           uniform 0;
     }
+
     upperWall
     {
-        type patch;
-        faces
-        (
-            (4 5 6 7)
-        );
+        type            calculated;
+        value           uniform 0;
     }
-);
+
+    f24
+    {
+        type            nutkWallFunction;
+        value           uniform 0;
+    }
+}
+
 
 // ************************************************************************* //

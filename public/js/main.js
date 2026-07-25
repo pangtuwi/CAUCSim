@@ -1903,6 +1903,7 @@ function updateCfdMonitorState(job) {
 async function fetchFlowVisualisation(jobId) {
   const imgEl = document.getElementById('flow-visualisation-img');
   const placeholderEl = document.getElementById('flow-visualisation-placeholder');
+  const placeholderTextEl = document.getElementById('flow-visualisation-placeholder-text');
   const loadingEl = document.getElementById('flow-visualisation-loading');
   
   if (!imgEl || !placeholderEl || !loadingEl) return;
@@ -1913,7 +1914,16 @@ async function fetchFlowVisualisation(jobId) {
     activeFlowImageUrl = null;
   }
   
+  // Reset placeholder text
+  if (placeholderTextEl) {
+    placeholderTextEl.textContent = 'No visualisation image available';
+  }
+  
+  // Clean up any existing handlers to prevent empty src triggering onerror
+  imgEl.onload = null;
+  imgEl.onerror = null;
   imgEl.src = '';
+  
   imgEl.style.display = 'none';
   placeholderEl.style.display = 'none';
   loadingEl.style.display = 'flex';
@@ -1927,17 +1937,38 @@ async function fetchFlowVisualisation(jobId) {
     
     if (res.ok) {
       const data = await res.json();
+      
+      // Register handlers before setting src to ensure correct order
+      imgEl.onload = () => {
+        imgEl.style.display = 'block';
+        loadingEl.style.display = 'none';
+        placeholderEl.style.display = 'none';
+      };
+      
+      imgEl.onerror = () => {
+        imgEl.style.display = 'none';
+        loadingEl.style.display = 'none';
+        placeholderEl.style.display = 'flex';
+        if (placeholderTextEl) {
+          placeholderTextEl.textContent = 'Visualisation image was not generated or failed to load';
+        }
+      };
+      
       imgEl.src = data.url;
-      imgEl.style.display = 'block';
-      loadingEl.style.display = 'none';
     } else {
       loadingEl.style.display = 'none';
       placeholderEl.style.display = 'flex';
+      if (placeholderTextEl) {
+        placeholderTextEl.textContent = 'Visualisation image was not generated for this simulation run';
+      }
     }
   } catch (err) {
     console.error("Failed to load flow visualisation:", err);
     loadingEl.style.display = 'none';
     placeholderEl.style.display = 'flex';
+    if (placeholderTextEl) {
+      placeholderTextEl.textContent = 'Failed to fetch flow visualisation';
+    }
   }
 }
 

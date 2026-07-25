@@ -7,7 +7,7 @@ const express = require('express');
 const serverless = require('serverless-http');
 const fs = require('fs');
 const path = require('path');
-const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const app = express();
@@ -436,9 +436,9 @@ with open('callback.json', 'w') as f:
        -d @callback.json || true
 }
 
-# Install zip, unzip and curl utilities immediately on boot
+# Install zip, unzip, curl, numpy, and matplotlib immediately on boot
 echo "==> Installing system packages..."
-apt-get update && apt-get install -y unzip zip curl
+apt-get update && apt-get install -y unzip zip curl python3-numpy python3-matplotlib
 
 # Install official AWS CLI v2
 echo "==> Installing AWS CLI v2..."
@@ -526,6 +526,16 @@ aws s3 cp results.zip "s3://\$S3_BUCKET/results/\$JOB_ID/results.zip"
 aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log"
 if [ -f postProcessing/forceCoeffs/0/forceCoeffs.dat ]; then
   aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://\$S3_BUCKET/results/\$JOB_ID/forceCoeffs.dat"
+fi
+
+# Generate flow slice image from VTK using python script
+echo "==> Generating flow slice image from VTK..."
+VTK_FILE=\$(find postProcessing/cutPlane -name "yNormal.vtk" | sort -V | tail -n 1)
+if [ -n "\$VTK_FILE" ] && [ -f "\$VTK_FILE" ]; then
+  echo "==> Found VTK file for plotting: \$VTK_FILE"
+  python3 generate_slice.py "\$VTK_FILE" flow_slice.png || echo "==> Failed to run python plotter."
+else
+  echo "==> yNormal.vtk not found."
 fi
 
 # Find and upload flow visualisation slice image
@@ -847,6 +857,13 @@ app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Job not found' });
   }
   try {
+    // Check if flow slice image exists in S3
+    const headCommand = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/flow_slice.png`
+    });
+    await s3Client.send(headCommand);
+
     const getCommand = new GetObjectCommand({
       Bucket: bucketName,
       Key: `results/${jobId}/flow_slice.png`
@@ -858,6 +875,9 @@ app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
       res.redirect(url);
     }
   } catch (err) {
+    if (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
+      return res.status(404).json({ error: 'Visualisation image not found on S3' });
+    }
     console.error("Failed to generate S3 URL for flow slice:", err);
     res.status(500).json({ error: 'Failed to generate visualisation download URL' });
   }

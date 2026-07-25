@@ -36,6 +36,16 @@ jest.mock('@aws-sdk/client-s3', () => {
             };
           }
 
+          if (commandName === 'HeadObjectCommand') {
+            if (!mockInMemoryS3[input.Key]) {
+              const err = new Error('NotFound');
+              err.name = 'NotFound';
+              err.code = 'NotFound';
+              throw err;
+            }
+            return {};
+          }
+
           if (commandName === 'ListObjectsV2Command') {
             const contents = Object.keys(mockInMemoryS3)
               .filter(key => key.startsWith(input.Prefix || ''))
@@ -62,6 +72,10 @@ jest.mock('@aws-sdk/client-s3', () => {
     }),
     GetObjectCommand: jest.fn().mockImplementation(function (params) {
       this.constructor = { name: 'GetObjectCommand' };
+      this.input = params;
+    }),
+    HeadObjectCommand: jest.fn().mockImplementation(function (params) {
+      this.constructor = { name: 'HeadObjectCommand' };
       this.input = params;
     }),
     ListObjectsV2Command: jest.fn().mockImplementation(function (params) {
@@ -343,6 +357,17 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
         .get('/api/jobs/non-existent-job/visualisation')
         .set('Authorization', authHeaderValue);
       expect(response.status).toBe(404);
+    });
+
+    it('should return 404 if the visualisation image does not exist for an existing job', async () => {
+      delete mockInMemoryS3[`results/${testJobId}/flow_slice.png`];
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/visualisation`)
+        .set('Authorization', authHeaderValue);
+      
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('Visualisation image not found');
     });
 
     it('should redirect to visualisation signed URL if it exists', async () => {

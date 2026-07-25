@@ -9,38 +9,15 @@ FoamFile
 {
     format      ascii;
     class       dictionary;
-    object      controlDict;
+    object      meshQualityDict;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-solver          incompressibleFluid;
+// Include defaults parameters from master dictionary
+#includeEtc "caseDicts/mesh/generation/meshQualityDict"
 
-startFrom       startTime;
+//- minFaceWeight (0 -> 0.5)
+minFaceWeight 0.02;
 
-startTime       0;
-
-stopAt          endTime;
-
-endTime         50;
-
-deltaT          1;
-
-writeControl    timeStep;
-
-writeInterval   50;
-
-purgeWrite      0;
-
-writeFormat     binary;
-
-writePrecision  6;
-
-writeCompression off;
-
-timeFormat      general;
-
-timePrecision   6;
-
-runTimeModifiable true;
 
 // ************************************************************************* //

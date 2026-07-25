@@ -9,38 +9,18 @@ FoamFile
 {
     format      ascii;
     class       dictionary;
-    object      controlDict;
+    object      momentumTransport;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-solver          incompressibleFluid;
+simulationType RAS;
 
-startFrom       startTime;
+RAS
+{
+    model               kOmegaSST;
 
-startTime       0;
+    turbulence          on;
 
-stopAt          endTime;
-
-endTime         50;
-
-deltaT          1;
-
-writeControl    timeStep;
-
-writeInterval   50;
-
-purgeWrite      0;
-
-writeFormat     binary;
-
-writePrecision  6;
-
-writeCompression off;
-
-timeFormat      general;
-
-timePrecision   6;
-
-runTimeModifiable true;
+}
 
 // ************************************************************************* //

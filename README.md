@@ -19,7 +19,7 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **Projected Frontal Area:** Uses an optimized 2D grid rasterization algorithm on the Y-Z plane to compute the exact projected frontal area ($m^2$) of the vehicle in under 15ms.
 - **F24 Regulations Checklist:** Automatically validates model length (&le; 2400 mm), width (&le; 900 mm), and height (&le; 1200 mm) constraints, mesh watertightness, proper $X$ coordinate positioning ($[0, \text{Length}]$), $Y$-axis symmetry, and $Z$-axis ground placement (wheels touching or slightly below $Z=0$).
 - **CFD Metric Scale Check:** Validates model dimensions and flags warnings if coordinates suggest a millimeter-to-meter scaling mismatch, preventing OpenFOAM solver divergence.
-- **Centerline Flow Visualisation:** Displays a centerline velocity magnitude slice (\(Y = 0\) plane) rendered directly by OpenFOAM's `runTimePostProcessing` VTK/Mesa function object at the end of the simulation.
+- **Centerline Flow Visualisation:** Displays a centerline velocity magnitude slice (\(Y = 0\) plane), rendered by a lightweight Python/`matplotlib` script (`generate_slice.py`) that parses the raw OpenFOAM `cutPlane` VTK output on the droplet, avoiding the need for a headless ParaView/Mesa rendering stack.
 
 ### 3. Serverless Storage Architecture (AWS S3)
 - **Direct-to-S3 Uploads:** Eliminates `multer` and multipart/form parsing. The Express server generates cryptographically signed PUT/GET URLs via the `@aws-sdk/s3-request-presigner` and the client PUTs the binary payload directly to AWS S3.
@@ -37,7 +37,7 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **Harmless Warning Suppression:** Wraps droplet environment setup in `set +e` and `set -e` to prevent non-critical shell warnings (e.g. bash context `pop_var_context` from `/opt/openfoam13/etc/bashrc` on Ubuntu 24.04) from aborting the boot sequence.
 - **Real-Time Solver Triggers:** Dynamically patches the droplet's `Allrun` script shebang to bash and inserts callback notification hooks right before `potentialFoam` and `foamRun` solver phases start.
 - **Fail-Safe Droplet Self-Destruct:** Spawns an asynchronous 1-hour background sleep process on the droplet at boot, utilizing token interpolation for authorization. Even if the simulation hangs, runs into shell errors, or loses network connection, the droplet is guaranteed to destroy itself after exactly 1 hour to prevent runaway billing leaks.
-- **Direct S3 Data Ingestion:** Droplets download the case-template and STL file directly from S3, perform meshing (`blockMesh`/`snappyHexMesh`), solve aerodynamic forces, upload the resulting `results.zip` / `simulation.log`, and immediately self-destruct.
+- **Direct S3 Data Ingestion:** Droplets download the case-template and STL file directly from S3, perform meshing (`blockMesh`/`snappyHexMesh`), solve aerodynamic forces, generate and upload the `flow_slice.png` centerline visualisation alongside the resulting `results.zip` / `simulation.log`, and immediately self-destruct.
 - **Independent Log Scrolling & Viewport Capping:** Constrains Stage 3 panel heights and utilizes deferred browser layout rendering (`setTimeout`) so that the terminal auto-scrolls to the bottom cleanly without pushing its scrollbar off-screen on smaller laptops.
 
 ---
@@ -81,3 +81,13 @@ When deploying the Express application as a serverless Lambda:
 - Do not pack your `.env` file containing credentials.
 - Assign an **IAM Execution Role** to the Lambda function containing read/write permissions for your S3 bucket. The AWS SDK will automatically assume this role to request S3 credentials securely.
 - Define `S3_BUCKET_NAME`, `AWS_REGION`, and the DigitalOcean configuration keys (`DIGITALOCEAN_TOKEN`, `DIGITALOCEAN_PROJECT_ID`, etc.) as **GitHub Secrets** when deploying via GitHub Actions, or configure them directly in the AWS Lambda Environment Variables console. These are mapped in `serverless.yaml` and `.github/workflows/deploy.yml` to automate their injection during deployment.
+
+---
+
+## Documentation Index
+
+For detailed technical specifications and setup guides, refer to:
+*   [ARCHITECTURE.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/ARCHITECTURE.md) - Overview of the system topography, decoupled architecture, and client-side data flows.
+*   [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) - Detailed step-by-step instructions for establishing AWS Cognito User Pools.
+*   [AWSCONFIG.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AWSCONFIG.md) - Reference record of production AWS resource naming and permission schemas.
+*   [TEMPLATE_UPLOAD.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/TEMPLATE_UPLOAD.md) - Step-by-step instructions for modifying and uploading updated OpenFOAM case templates to S3.

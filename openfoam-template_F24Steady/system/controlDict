@@ -1,0 +1,100 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  13
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+solver          incompressibleFluid;
+
+startFrom       startTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         500;
+
+deltaT          1;
+
+writeControl    timeStep;
+
+writeInterval   100;
+
+purgeWrite      0;
+
+writeFormat     binary;
+
+writePrecision  6;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable true;
+
+functions
+{
+    centerSliceImage
+    {
+        type            runTimePostProcessing;
+        libs            ("librunTimePostProcessing.so");
+        outputFormat    png;
+        outputPrefix    "flow_slice";
+
+        // Render at the end of the simulation
+        writeControl    writeTime;
+
+        // Camera setup
+        camera
+        {
+            projection      perspective;
+            focalPoint      (1.5 0 0.2);     // Center point of your car
+            position        (1.5 -4.0 0.2);   // Side view camera position
+            up              (0 0 1);          // Z is vertical
+            zoom            1.2;
+        }
+
+        // Define a cutting plane along the centerline (Y = 0)
+        surfaces
+        {
+            planeY
+            {
+                type        plane;
+                planeType   pointAndNormal;
+                pointAndNormalDict
+                {
+                    point   (0 0 0);
+                    normal  (0 1 0);          // Slices along the Y-axis
+                }
+            }
+        }
+
+        // Color the slice by Velocity magnitude (U)
+        fieldVisualisations
+        {
+            velocitySlice
+            {
+                type            surface;
+                surfaces        (planeY);
+                field           U;
+                representation  surface;
+                colorMap        rainbow;
+                range           (0 30);       // Velocity scale in m/s
+            }
+        }
+    }
+}
+
+// ************************************************************************* //
+

@@ -9,38 +9,12 @@ FoamFile
 {
     format      ascii;
     class       dictionary;
-    object      controlDict;
+    object      functions;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-solver          incompressibleFluid;
-
-startFrom       startTime;
-
-startTime       0;
-
-stopAt          endTime;
-
-endTime         50;
-
-deltaT          1;
-
-writeControl    timeStep;
-
-writeInterval   50;
-
-purgeWrite      0;
-
-writeFormat     binary;
-
-writePrecision  6;
-
-writeCompression off;
-
-timeFormat      general;
-
-timePrecision   6;
-
-runTimeModifiable true;
+#includeFunc cutPlane
+#includeFunc streamlines
+#includeFunc forceCoeffs
 
 // ************************************************************************* //

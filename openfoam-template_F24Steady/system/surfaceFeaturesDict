@@ -9,38 +9,22 @@ FoamFile
 {
     format      ascii;
     class       dictionary;
-    object      controlDict;
+    object      surfaceFeaturesDict;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-solver          incompressibleFluid;
+surfaces ("Basic_F24.stl");
 
-startFrom       startTime;
+// Identify a feature when angle between faces < includedAngle
+includedAngle       150;
 
-startTime       0;
+subsetFeatures
+{
+    // Keep nonManifold edges (edges with >2 connected faces)
+    nonManifoldEdges       no;
 
-stopAt          endTime;
-
-endTime         50;
-
-deltaT          1;
-
-writeControl    timeStep;
-
-writeInterval   50;
-
-purgeWrite      0;
-
-writeFormat     binary;
-
-writePrecision  6;
-
-writeCompression off;
-
-timeFormat      general;
-
-timePrecision   6;
-
-runTimeModifiable true;
+    // Keep open edges (edges with 1 connected face)
+    openEdges       yes;
+}
 
 // ************************************************************************* //
