@@ -551,6 +551,27 @@ else
   echo "==> Flow slice image not found."
 fi
 
+# Generate 3D streamlines visualisation (PNG + GLB) from the OpenFOAM
+# streamlines function object's track output, using headless ParaView
+echo "==> Locating OpenFOAM streamline tracks for 3D visualisation..."
+TRACKS_FILE=\$(find postProcessing/streamlines -name "*.vtp" 2>/dev/null | sort -V | tail -n 1)
+if [ -z "\$TRACKS_FILE" ]; then
+  TRACKS_FILE=\$(find postProcessing/streamlines -name "*.vtk" 2>/dev/null | sort -V | tail -n 1)
+fi
+if [ -n "\$TRACKS_FILE" ] && [ -f "\$TRACKS_FILE" ] && command -v pvpython >/dev/null 2>&1; then
+  echo "==> Found streamline tracks: \$TRACKS_FILE. Running pvpython render_flow.py..."
+  update_job_status "running" "generating_visualisation"
+  timeout 300 pvpython render_flow.py "\$TRACKS_FILE" "." || echo "==> pvpython 3D visualisation failed or timed out; continuing without it."
+  if [ -f flow_streamlines_3d.png ]; then
+    aws s3 cp flow_streamlines_3d.png "s3://\$S3_BUCKET/results/\$JOB_ID/flow_streamlines_3d.png" --content-type "image/png" || true
+  fi
+  if [ -f flow_3d_streamlines.gltf ]; then
+    aws s3 cp flow_3d_streamlines.gltf "s3://\$S3_BUCKET/results/\$JOB_ID/flow_3d_streamlines.gltf" --content-type "model/gltf+json" || true
+  fi
+else
+  echo "==> Skipping 3D visualisation (no streamline tracks found or pvpython unavailable)."
+fi
+
 # Calculate force coefficients and compile aerodynamic metrics
 METRICS_JSON="{}"
 COEFFS_FILE="postProcessing/forceCoeffs/0/forceCoeffs.dat"
@@ -880,6 +901,72 @@ app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
     }
     console.error("Failed to generate S3 URL for flow slice:", err);
     res.status(500).json({ error: 'Failed to generate visualisation download URL' });
+  }
+});
+
+// 8. GET /api/jobs/:id/streamlines-image: Redirect or serve flow_streamlines_3d.png
+app.get('/api/jobs/:id/streamlines-image', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  try {
+    const headCommand = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/flow_streamlines_3d.png`
+    });
+    await s3Client.send(headCommand);
+
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/flow_streamlines_3d.png`
+    });
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    if (req.query.json === 'true') {
+      res.json({ url });
+    } else {
+      res.redirect(url);
+    }
+  } catch (err) {
+    if (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
+      return res.status(404).json({ error: 'Streamlines image not found on S3' });
+    }
+    console.error("Failed to generate S3 URL for streamlines image:", err);
+    res.status(500).json({ error: 'Failed to generate streamlines image download URL' });
+  }
+});
+
+// 9. GET /api/jobs/:id/streamlines-model: Redirect or serve flow_3d_streamlines.gltf
+app.get('/api/jobs/:id/streamlines-model', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  try {
+    const headCommand = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/flow_3d_streamlines.gltf`
+    });
+    await s3Client.send(headCommand);
+
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/flow_3d_streamlines.gltf`
+    });
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    if (req.query.json === 'true') {
+      res.json({ url });
+    } else {
+      res.redirect(url);
+    }
+  } catch (err) {
+    if (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
+      return res.status(404).json({ error: 'Streamlines model not found on S3' });
+    }
+    console.error("Failed to generate S3 URL for streamlines model:", err);
+    res.status(500).json({ error: 'Failed to generate streamlines model download URL' });
   }
 });
 

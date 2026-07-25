@@ -376,10 +376,70 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       const response = await request(app)
         .get(`/api/jobs/${testJobId}/visualisation`)
         .set('Authorization', authHeaderValue);
-      
+
       expect(response.status).toBe(302);
       expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
       expect(response.headers.location).toContain('/flow_slice.png');
+    });
+
+    it('should return 404 for streamlines-image of a non-existent job', async () => {
+      const response = await request(app)
+        .get('/api/jobs/non-existent-job/streamlines-image')
+        .set('Authorization', authHeaderValue);
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 404 if the streamlines image does not exist for an existing job', async () => {
+      delete mockInMemoryS3[`results/${testJobId}/flow_streamlines_3d.png`];
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-image`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('Streamlines image not found');
+    });
+
+    it('should redirect to streamlines-image signed URL if it exists', async () => {
+      mockInMemoryS3[`results/${testJobId}/flow_streamlines_3d.png`] = Buffer.from('mock png data');
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-image`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
+      expect(response.headers.location).toContain('/flow_streamlines_3d.png');
+    });
+
+    it('should return 404 for streamlines-model of a non-existent job', async () => {
+      const response = await request(app)
+        .get('/api/jobs/non-existent-job/streamlines-model')
+        .set('Authorization', authHeaderValue);
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 404 if the streamlines model does not exist for an existing job', async () => {
+      delete mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines.gltf`];
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-model`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('Streamlines model not found');
+    });
+
+    it('should redirect to streamlines-model signed URL if it exists', async () => {
+      mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines.gltf`] = Buffer.from('mock gltf data');
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-model`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
+      expect(response.headers.location).toContain('/flow_3d_streamlines.gltf');
     });
   });
 });

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // --- State Management ---
 let scene, camera, renderer, controls;
@@ -9,6 +10,8 @@ let activePoints = null;
 let activeWireframe = null;
 let activeGeometry = null; // Store geometry for volume recalculations
 let gridHelper, axesHelper;
+let activeStreamlineScene = null;
+let streamlinesToggleActive = false;
 let currentRenderMode = 'shaded'; // 'shaded' | 'wireframe' | 'points'
 let activeFilename = null;
 let activeUrl = null;
@@ -139,7 +142,7 @@ function switchStage(stageNum) {
     if (activeStage === 4) {
       cadViewportContainer.style.display = 'none';
       graphicalResultsPanel.style.display = 'flex';
-      renderPerformanceCharts();
+      switchResultsPage('charts');
     } else {
       cadViewportContainer.style.display = 'flex';
       graphicalResultsPanel.style.display = 'none';
@@ -169,6 +172,23 @@ function lockStage(stageNum) {
   }
 }
 window.lockStage = lockStage;
+
+// --- Results Panel Page Switching ---
+function switchResultsPage(pageName) {
+  const pages = ['charts', 'flow', 'streamlines'];
+  pages.forEach(p => {
+    const pageEl = document.getElementById(`results-page-${p}`);
+    if (pageEl) pageEl.style.display = p === pageName ? 'flex' : 'none';
+    const tabBtn = document.querySelector(`[data-results-page="${p}"]`);
+    if (tabBtn) tabBtn.classList.toggle('active', p === pageName);
+  });
+  if (pageName === 'charts') {
+    // Charts are SVG-measured off their container's clientWidth/Height, which
+    // is 0 while display:none -- re-render now that the page is visible.
+    renderPerformanceCharts();
+  }
+}
+window.switchResultsPage = switchResultsPage;
 
 // --- SVG Performance Charts Rendering ---
 function renderPerformanceCharts() {
@@ -358,7 +378,8 @@ window.renderPerformanceCharts = renderPerformanceCharts;
 
 // Window resize handler for performance charts
 window.addEventListener('resize', () => {
-  if (activeStage === 4) {
+  const chartsPageEl = document.getElementById('results-page-charts');
+  if (activeStage === 4 && chartsPageEl && chartsPageEl.style.display !== 'none') {
     renderPerformanceCharts();
   }
 });
@@ -1309,6 +1330,13 @@ function bindEvents() {
     });
   });
 
+  // Results Panel Page Tabs
+  document.querySelectorAll('[data-results-page]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      switchResultsPage(e.target.dataset.resultsPage);
+    });
+  });
+
   // Shading Modes
   document.querySelectorAll('[data-render-mode]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1369,6 +1397,16 @@ function bindEvents() {
   toggleAxesBtn.addEventListener('click', () => {
     toggleAxesBtn.classList.toggle('active');
     axesHelper.visible = toggleAxesBtn.classList.contains('active');
+  });
+
+  const toggleStreamlinesBtn = document.getElementById('toggle-streamlines');
+  streamlinesToggleActive = toggleStreamlinesBtn.classList.contains('active');
+  toggleStreamlinesBtn.addEventListener('click', () => {
+    toggleStreamlinesBtn.classList.toggle('active');
+    streamlinesToggleActive = toggleStreamlinesBtn.classList.contains('active');
+    if (activeStreamlineScene) {
+      activeStreamlineScene.visible = streamlinesToggleActive;
+    }
   });
 
   // Unit Mode Selector change
@@ -1836,7 +1874,8 @@ function updateEngineStatus(job) {
     else if (job.stage === 'mesh_generation') stageText = 'Meshing';
     else if (job.stage === 'solving') stageText = 'Solving';
     else if (job.stage === 'processing_results') stageText = 'Processing';
-    
+    else if (job.stage === 'generating_visualisation') stageText = 'Rendering 3D';
+
     engineStatusVal.textContent = stageText;
   }
 }
@@ -1866,6 +1905,10 @@ function updateCfdMonitorState(job) {
     case 'processing_results':
       stageName = 'Packaging Results';
       percent = 90;
+      break;
+    case 'generating_visualisation':
+      stageName = 'Rendering 3D Visualisation';
+      percent = 95;
       break;
     case 'completed':
       stageName = 'Completed';
@@ -1972,12 +2015,113 @@ async function fetchFlowVisualisation(jobId) {
   }
 }
 
+async function fetchStreamlinesVisualisation(jobId) {
+  const imgEl = document.getElementById('streamlines-visualisation-img');
+  const placeholderEl = document.getElementById('streamlines-visualisation-placeholder');
+  const placeholderTextEl = document.getElementById('streamlines-visualisation-placeholder-text');
+  const loadingEl = document.getElementById('streamlines-visualisation-loading');
+
+  if (!imgEl || !placeholderEl || !loadingEl) return;
+
+  if (placeholderTextEl) {
+    placeholderTextEl.textContent = 'No visualisation image available';
+  }
+
+  imgEl.onload = null;
+  imgEl.onerror = null;
+  imgEl.src = '';
+
+  imgEl.style.display = 'none';
+  placeholderEl.style.display = 'none';
+  loadingEl.style.display = 'flex';
+
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/streamlines-image?json=true`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || ''}`
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+
+      imgEl.onload = () => {
+        imgEl.style.display = 'block';
+        loadingEl.style.display = 'none';
+        placeholderEl.style.display = 'none';
+      };
+
+      imgEl.onerror = () => {
+        imgEl.style.display = 'none';
+        loadingEl.style.display = 'none';
+        placeholderEl.style.display = 'flex';
+        if (placeholderTextEl) {
+          placeholderTextEl.textContent = 'Visualisation image was not generated or failed to load';
+        }
+      };
+
+      imgEl.src = data.url;
+    } else {
+      loadingEl.style.display = 'none';
+      placeholderEl.style.display = 'flex';
+      if (placeholderTextEl) {
+        placeholderTextEl.textContent = 'Visualisation image was not generated for this simulation run';
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load streamlines visualisation:", err);
+    loadingEl.style.display = 'none';
+    placeholderEl.style.display = 'flex';
+    if (placeholderTextEl) {
+      placeholderTextEl.textContent = 'Failed to fetch streamlines visualisation';
+    }
+  }
+}
+
+function clearStreamlineScene() {
+  if (activeStreamlineScene) {
+    scene.remove(activeStreamlineScene);
+    activeStreamlineScene = null;
+  }
+}
+
+async function fetchStreamlinesModel(jobId) {
+  clearStreamlineScene();
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/streamlines-model?json=true`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || ''}`
+      }
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const loader = new GLTFLoader();
+    loader.load(data.url, (gltf) => {
+      const streamlineScene = gltf.scene;
+      // ParaView exports in meters; the app's world units are millimeters (matches loadSTL's m->mm scaling)
+      streamlineScene.scale.set(1000, 1000, 1000);
+      streamlineScene.position.set(0, 0, 0);
+      streamlineScene.visible = streamlinesToggleActive;
+      activeStreamlineScene = streamlineScene;
+      scene.add(streamlineScene);
+    }, undefined, (err) => {
+      console.error('Error loading 3D flow visualisation scene:', err);
+    });
+  } catch (err) {
+    console.error("Failed to fetch streamlines model:", err);
+  }
+}
+
 function displayCfdResults(job) {
   showCfdMonitor(false);
   showCfdResults(true);
-  
+
   if (job && job.jobId) {
     fetchFlowVisualisation(job.jobId);
+    fetchStreamlinesVisualisation(job.jobId);
+    fetchStreamlinesModel(job.jobId);
   }
   
   const m = job.metrics;
@@ -2059,7 +2203,19 @@ function clearCfdRun() {
     URL.revokeObjectURL(activeFlowImageUrl);
     activeFlowImageUrl = null;
   }
-  
+
+  // Clear 3D streamlines visualisation state
+  const streamlinesImgEl = document.getElementById('streamlines-visualisation-img');
+  const streamlinesPlaceholderEl = document.getElementById('streamlines-visualisation-placeholder');
+  const streamlinesLoadingEl = document.getElementById('streamlines-visualisation-loading');
+  if (streamlinesImgEl && streamlinesPlaceholderEl && streamlinesLoadingEl) {
+    streamlinesImgEl.src = '';
+    streamlinesImgEl.style.display = 'none';
+    streamlinesLoadingEl.style.display = 'none';
+    streamlinesPlaceholderEl.style.display = 'flex';
+  }
+  clearStreamlineScene();
+
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
     consoleEl.textContent = '';

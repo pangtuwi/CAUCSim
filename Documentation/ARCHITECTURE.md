@@ -59,12 +59,12 @@ The platform relies on a decoupled, asynchronous, "scale-to-zero" model. Heavy p
 *   **Platform Engine:** **AWS S3 (Simple Storage Service)**.
 *   **Data Layout:**
     *   `uploads/` - Immutable source files named via custom collision-resistant hashes (`uploads/${Date.now()}_${filename}`).
-    *   `results/` - Packaged post-processed fields, normalized slice visuals (PNGs), structural metadata JSON packages, and simulation logs (`simulation.log`).
+    *   `results/` - Packaged post-processed fields, normalized slice visuals (PNGs), 3D streamlines visuals (`flow_streamlines_3d.png` / `flow_3d_streamlines.gltf`, generated via headless ParaView when available), structural metadata JSON packages, and simulation logs (`simulation.log`).
 *   **Security & Boundaries:** Configured with a dedicated **Cross-Origin Resource Sharing (CORS)** filter restricting verb propagation explicitly to the development environment (`localhost`) and production domains.
 
 ### D. Elastic Compute Node (HPC Processing Layer)
 *   **Platform Engine:** **DigitalOcean Compute API** (Optimized Dedicated High-CPU Droplets, optimized for single-node matrix calculations).
-*   **Image Management:** Custom pre-baked OS Snapshot containing a compiled snapshot of **OpenFOAM**, relevant mesh extraction tools (`snappyHexMesh`), and automated execution wrappers.
+*   **Image Management:** Custom pre-baked OS Snapshot containing a compiled snapshot of **OpenFOAM**, relevant mesh extraction tools (`snappyHexMesh`), automated execution wrappers, and (optionally) a headless **ParaView**/`pvpython` install used to render 3D streamline visuals — the droplet script detects `pvpython` at runtime and skips 3D rendering gracefully if it's absent from the snapshot.
 *   **Lifecycle Controller:** **Cloud-Init (User Data bash payload)**. The instance boots, auto-configures its environment, checks out the data slice from S3, drives the execution loop, commits results back to S3, and explicitly signals the hypervisor to destroy its own hardware instance to prevent idle billing leaks.
 
 ---
