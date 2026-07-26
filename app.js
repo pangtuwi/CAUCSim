@@ -436,16 +436,26 @@ with open('callback.json', 'w') as f:
        -d @callback.json || true
 }
 
-# Install zip, unzip, curl, numpy, and matplotlib immediately on boot
-echo "==> Installing system packages..."
-apt-get update && apt-get install -y unzip zip curl python3-numpy python3-matplotlib
+# Install zip, unzip, curl, numpy, and matplotlib -- skipped if already
+# baked into the snapshot (see Documentation/SETUP_DROPLET.md), falls back
+# to installing them here so a stale/bare snapshot still works.
+if ! command -v unzip >/dev/null 2>&1 || ! command -v zip >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! python3 -c "import numpy, matplotlib" >/dev/null 2>&1; then
+  echo "==> Installing system packages..."
+  apt-get update && apt-get install -y unzip zip curl python3-numpy python3-matplotlib
+else
+  echo "==> System packages already present on snapshot, skipping install."
+fi
 
-# Install official AWS CLI v2
-echo "==> Installing AWS CLI v2..."
-curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip -q awscliv2.zip
-./aws/install
-rm -rf awscliv2.zip aws/
+# Install official AWS CLI v2 -- skipped if already baked into the snapshot
+if ! command -v aws >/dev/null 2>&1; then
+  echo "==> Installing AWS CLI v2..."
+  curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip -q awscliv2.zip
+  ./aws/install
+  rm -rf awscliv2.zip aws/
+else
+  echo "==> AWS CLI already present on snapshot, skipping install."
+fi
 
 # AWS CLI credentials are already configured and exported at boot
 
@@ -558,10 +568,14 @@ TRACKS_FILE=\$(find postProcessing/streamlines -name "*.vtp" 2>/dev/null | sort 
 if [ -z "\$TRACKS_FILE" ]; then
   TRACKS_FILE=\$(find postProcessing/streamlines -name "*.vtk" 2>/dev/null | sort -V | tail -n 1)
 fi
-if [ -n "\$TRACKS_FILE" ] && [ -f "\$TRACKS_FILE" ] && command -v pvpython >/dev/null 2>&1; then
+if [ -n "\$TRACKS_FILE" ] && [ -f "\$TRACKS_FILE" ] && command -v pvpython >/dev/null 2>&1 && command -v xvfb-run >/dev/null 2>&1; then
   echo "==> Found streamline tracks: \$TRACKS_FILE. Running pvpython render_flow.py..."
   update_job_status "running" "generating_visualisation"
-  timeout 300 pvpython render_flow.py "\$TRACKS_FILE" "." || echo "==> pvpython 3D visualisation failed or timed out; continuing without it."
+  # pvpython (apt ParaView) needs an X display -- xvfb-run supplies a virtual
+  # one. The explicit screen size matters: xvfb-run's bare defaults aren't
+  # enough, ParaView's vtkXOpenGLRenderWindow aborts with "bad X server
+  # connection" against them (see Documentation/SETUP_DROPLET.md).
+  timeout 300 xvfb-run -a --server-args='-screen 0 1280x1024x24' pvpython render_flow.py "\$TRACKS_FILE" "." || echo "==> pvpython 3D visualisation failed or timed out; continuing without it."
   if [ -f flow_streamlines_3d.png ]; then
     aws s3 cp flow_streamlines_3d.png "s3://\$S3_BUCKET/results/\$JOB_ID/flow_streamlines_3d.png" --content-type "image/png" || true
   fi
@@ -569,7 +583,7 @@ if [ -n "\$TRACKS_FILE" ] && [ -f "\$TRACKS_FILE" ] && command -v pvpython >/dev
     aws s3 cp flow_3d_streamlines.gltf "s3://\$S3_BUCKET/results/\$JOB_ID/flow_3d_streamlines.gltf" --content-type "model/gltf+json" || true
   fi
 else
-  echo "==> Skipping 3D visualisation (no streamline tracks found or pvpython unavailable)."
+  echo "==> Skipping 3D visualisation (no streamline tracks found, or pvpython/xvfb-run unavailable)."
 fi
 
 # Calculate force coefficients and compile aerodynamic metrics

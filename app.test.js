@@ -3,6 +3,7 @@ process.env.S3_BUCKET_NAME = 'mock-bucket';
 process.env.COGNITO_USER_POOL_ID = 'us-east-1_mockpool';
 process.env.COGNITO_CLIENT_ID = 'mockclient';
 process.env.DIGITALOCEAN_TOKEN = 'mock-do-token';
+process.env.DIGITALOCEAN_SNAPSHOT_NAME = 'openfoam-base';
 process.env.NODE_ENV = 'test';
 
 // mockInMemoryS3 Mock Database

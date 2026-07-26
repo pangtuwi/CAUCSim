@@ -50,10 +50,37 @@ else
   exit 1
 fi
 
+echo "==> Installing job-runtime tools (unzip, zip, curl, numpy, matplotlib) ..."
+# These are used on every job run by app.js's droplet script (template
+# extraction, S3 uploads, the 2D flow-slice plot). Baking them into the
+# snapshot means every job skips this apt install at boot; app.js still
+# falls back to installing them itself if it finds them missing, so this
+# step is not required for jobs to work -- just faster when present.
+apt-get -y install unzip zip curl python3-numpy python3-matplotlib
+
+echo "==> Installing AWS CLI v2 ..."
+# Used throughout app.js's droplet script for every S3 upload/download and
+# job status callback -- unlike the packages above, this one IS required
+# for a job to do anything at all, so it's worth getting right here.
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws/
+
+echo "==> Verifying job-runtime tools ..."
+if command -v unzip >/dev/null && command -v zip >/dev/null && command -v curl >/dev/null \
+   && command -v aws >/dev/null && python3 -c "import numpy, matplotlib" >/dev/null 2>&1; then
+  echo "    OK — unzip, zip, curl, aws ($(aws --version)), numpy, and matplotlib all resolve."
+else
+  echo "ERROR: one or more job-runtime tools did not install correctly." >&2
+  exit 1
+fi
+
 cat <<EOF
 
 ============================================================
- OpenFOAM ${OF_VERSION} installed successfully.
+ OpenFOAM ${OF_VERSION} and job-runtime tools (unzip/zip/curl/AWS CLI v2/
+ numpy/matplotlib) installed successfully.
 
  Next steps to create your reusable snapshot (run LOCALLY):
 
@@ -61,7 +88,7 @@ cat <<EOF
    doctl compute droplet-action shutdown <DROPLET_ID> --wait
 
    # 2. Snapshot it — this name must match SNAPSHOT_NAME in run-cfd.sh
-   doctl compute droplet snapshot <DROPLET_ID> \\
+   doctl compute droplet-action snapshot <DROPLET_ID> \\
        --snapshot-name openfoam-base --wait
 
    # 3. Destroy the build droplet (stops billing — powered-off still bills)
