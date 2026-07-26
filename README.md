@@ -93,3 +93,4 @@ For detailed technical specifications and setup guides, refer to:
 *   [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) - Detailed step-by-step instructions for establishing AWS Cognito User Pools.
 *   [AWSCONFIG.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AWSCONFIG.md) - Reference record of production AWS resource naming and permission schemas.
 *   [TEMPLATE_UPLOAD.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/TEMPLATE_UPLOAD.md) - Step-by-step instructions for modifying and uploading updated OpenFOAM case templates to S3.
+*   [SETUP_DROPLET.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/SETUP_DROPLET.md) - How to build and update the pre-baked DigitalOcean snapshot (OpenFOAM + headless ParaView) that CFD droplets boot from.
