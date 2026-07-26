@@ -25,13 +25,11 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 
 ### 3. Serverless Storage Architecture (AWS S3)
 - **Direct-to-S3 Uploads:** Eliminates `multer` and multipart/form parsing. The Express server generates cryptographically signed PUT/GET URLs via the `@aws-sdk/s3-request-presigner` and the client PUTs the binary payload directly to AWS S3.
-- **Local Mock Fallback:** If S3 configurations are absent, the application seamlessly runs in a local disk fallback mode, simulating presigned storage flows.
 - **Dynamic Connection Status Indicators:** The header bar dynamically updates to show connection states for the Local Server, CAD Storage (complete with S3 bucket name tooltips), and the **OpenFOAM Engine** (which transitions between `Standby`, `Queued`, `Initializing`, `Meshing`, `Solving`, and `Processing` in real time).
 
 ### 4. Authentication via AWS Cognito
 - **Secure Sign In:** Protects sensitive CAD files and simulation endpoints. The frontend communicates directly with AWS Cognito User Pools (via HTTP fetch) to exchange credentials for ID tokens.
 - **JWT Validation Middleware:** The Express server validates RS256 JWT signatures on all data requests using `aws-jwt-verify`.
-- **Developer Bypass (Mock Mode):** If Cognito configuration is omitted, the app starts in a local developer mode, providing an overlay bypass button.
 - **Setup Instructions:** Refer to [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) for step-by-step AWS Cognito User Pool creation.
 
 ### 5. Elastic Cloud HPC Compute (DigitalOcean)
@@ -63,11 +61,10 @@ AWS_REGION=eu-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
 
-# AWS Cognito Configuration (Omit to use Mock Bypass Login mode)
+# AWS Cognito Configuration
 COGNITO_USER_POOL_ID=your_user_pool_id
 COGNITO_CLIENT_ID=your_app_client_id
 ```
-*Note: If `S3_BUCKET_NAME` or `COGNITO_USER_POOL_ID` are left blank, the app will automatically fall back to **Local Disk Mock Mode** and **Mock Authentication Bypass Mode**.*
 
 ### 3. Run Locally
 Start the development server with watch mode enabled:
