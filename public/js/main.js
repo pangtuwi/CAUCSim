@@ -62,7 +62,6 @@ const authEmail = document.getElementById('auth-email');
 const authPassword = document.getElementById('auth-password');
 const authError = document.getElementById('auth-error');
 const btnLoginSubmit = document.getElementById('btn-login-submit');
-const btnMockLogin = document.getElementById('btn-mock-login');
 const btnLogout = document.getElementById('btn-logout');
 
 // Stats Elements
@@ -1500,10 +1499,6 @@ async function checkStorageStatus() {
     authMode = data.auth || 'aws-cognito';
     cognitoConfig = data.cognito || null;
     
-    if (btnMockLogin) {
-      btnMockLogin.style.display = 'none';
-    }
-    
     if (data.storage === 'aws-s3') {
       storageStatusEl.className = 'status-indicator online';
       storageStatusVal.textContent = 'AWS S3';
@@ -1520,9 +1515,6 @@ async function checkStorageStatus() {
     storageStatusEl.className = 'status-indicator offline';
     storageStatusVal.textContent = 'Disconnected';
     storageStatusEl.title = 'Could not connect to storage provider status API.';
-    if (btnMockLogin) {
-      btnMockLogin.style.display = 'none';
-    }
     validateSession();
   }
 }
