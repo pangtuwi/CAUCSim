@@ -20,6 +20,14 @@ let currentFrontalArea = 0;
 let activeStage = 1;
 let unlockedStages = new Set([1]);
 
+const MPH_TO_MS = 0.44704;
+const DEFAULT_RACE_SPEED_MPH = 30;
+let raceSpeedMph = DEFAULT_RACE_SPEED_MPH;
+
+function raceSpeedMs() {
+  return raceSpeedMph * MPH_TO_MS;
+}
+
 // Authentication State
 let idToken = localStorage.getItem('caucsim_id_token') || null;
 let authMode = 'cognito'; // 'cognito'
@@ -208,8 +216,11 @@ function renderPerformanceCharts() {
   const graphH = h - padding.top - padding.bottom;
   
   const density = 1.225; // kg/m³
-  const speeds = Array.from({ length: 11 }, (_, i) => i * 2); // 0, 2, 4, ..., 20 m/s
-  
+  const vRace = raceSpeedMs();
+  // Axis spans to the race speed with headroom, rounded up to a clean 5 m/s step
+  const vMax = Math.max(20, Math.ceil((vRace * 1.5) / 5) * 5);
+  const speeds = Array.from({ length: 11 }, (_, i) => (i * vMax) / 10);
+
   // 1. Forces Chart (Drag & Lift)
   const dragForces = speeds.map(v => 0.5 * density * v * v * cdaVal);
   const liftForces = speeds.map(v => 0.5 * density * v * v * claVal);
@@ -218,20 +229,20 @@ function renderPerformanceCharts() {
   const yMaxF = Math.ceil(maxF / 5) * 5;
   
   const mapForceCoords = (v, f) => {
-    const x = padding.left + (v / 20) * graphW;
+    const x = padding.left + (v / vMax) * graphW;
     const y = padding.top + (1 - (f - (-yMaxF)) / (2 * yMaxF)) * graphH;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   };
-  
+
   const dragPoints = speeds.map(v => mapForceCoords(v, 0.5 * density * v * v * cdaVal)).join(' ');
   const liftPoints = speeds.map(v => mapForceCoords(v, 0.5 * density * v * v * claVal)).join(' ');
-  
-  const raceDragY = 0.5 * density * 13.4 * 13.4 * cdaVal;
-  const raceLiftY = 0.5 * density * 13.4 * 13.4 * claVal;
-  const raceDragCoord = mapForceCoords(13.4, raceDragY);
-  const raceLiftCoord = mapForceCoords(13.4, raceLiftY);
-  
-  const xRace = padding.left + (13.4 / 20) * graphW;
+
+  const raceDragY = 0.5 * density * vRace * vRace * cdaVal;
+  const raceLiftY = 0.5 * density * vRace * vRace * claVal;
+  const raceDragCoord = mapForceCoords(vRace, raceDragY);
+  const raceLiftCoord = mapForceCoords(vRace, raceLiftY);
+
+  const xRace = padding.left + (vRace / vMax) * graphW;
   
   forcesWrapper.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}">
@@ -255,14 +266,15 @@ function renderPerformanceCharts() {
         `;
       }).join('')}
       
-      ${[ 0, 5, 10, 15, 20 ].map(v => {
-        const x = padding.left + (v / 20) * graphW;
+      ${[ 0, 0.25, 0.5, 0.75, 1 ].map(frac => {
+        const v = frac * vMax;
+        const x = padding.left + frac * graphW;
         return `
           <line x1="${x}" y1="${padding.top}" x2="${x}" y2="${h - padding.bottom}" class="chart-grid-line" />
-          <text x="${x}" y="${h - padding.bottom + 14}" class="chart-label-text" text-anchor="middle">${v}</text>
+          <text x="${x}" y="${h - padding.bottom + 14}" class="chart-label-text" text-anchor="middle">${v % 1 === 0 ? v : v.toFixed(1)}</text>
         `;
       }).join('')}
-      
+
       <!-- Zero baseline -->
       <line x1="${padding.left}" y1="${padding.top + 0.5 * graphH}" x2="${w - padding.right}" y2="${padding.top + 0.5 * graphH}" class="chart-axis-line" stroke-dasharray="2 2" />
       
@@ -308,18 +320,18 @@ function renderPerformanceCharts() {
   const yMaxP = Math.ceil(maxP / 50) * 50;
   
   const mapPowerCoords = (v, p) => {
-    const x = padding.left + (v / 20) * graphW;
+    const x = padding.left + (v / vMax) * graphW;
     const y = padding.top + (1 - p / yMaxP) * graphH;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   };
-  
+
   const powerPoints = speeds.map(v => {
     const dragF = 0.5 * density * v * v * cdaVal;
     return mapPowerCoords(v, dragF * v);
   }).join(' ');
-  
-  const racePowerY = raceDragY * 13.4;
-  const racePowerCoord = mapPowerCoords(13.4, racePowerY);
+
+  const racePowerY = raceDragY * vRace;
+  const racePowerCoord = mapPowerCoords(vRace, racePowerY);
   
   powerWrapper.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}">
@@ -339,18 +351,19 @@ function renderPerformanceCharts() {
         `;
       }).join('')}
       
-      ${[ 0, 5, 10, 15, 20 ].map(v => {
-        const x = padding.left + (v / 20) * graphW;
+      ${[ 0, 0.25, 0.5, 0.75, 1 ].map(frac => {
+        const v = frac * vMax;
+        const x = padding.left + frac * graphW;
         return `
           <line x1="${x}" y1="${padding.top}" x2="${x}" y2="${h - padding.bottom}" class="chart-grid-line" />
-          <text x="${x}" y="${h - padding.bottom + 14}" class="chart-label-text" text-anchor="middle">${v}</text>
+          <text x="${x}" y="${h - padding.bottom + 14}" class="chart-label-text" text-anchor="middle">${v % 1 === 0 ? v : v.toFixed(1)}</text>
         `;
       }).join('')}
-      
+
       <!-- Grid Border Axis -->
       <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${h - padding.bottom}" class="chart-axis-line" />
       <line x1="${padding.left}" y1="${h - padding.bottom}" x2="${w - padding.right}" y2="${h - padding.bottom}" class="chart-axis-line" />
-      
+
       <!-- Area curve -->
       <path d="M${padding.left},${h - padding.bottom} L${powerPoints} L${w - padding.right},${h - padding.bottom} Z" class="chart-area-power" />
       
@@ -1279,8 +1292,50 @@ async function uploadFile(file) {
   }
 }
 
+function updateRaceSpeedLabels() {
+  const msDisplay = document.getElementById('race-speed-ms-display');
+  if (msDisplay) msDisplay.textContent = raceSpeedMs().toFixed(1);
+}
+
+// Results labels track the speed the run was actually solved at, which is not
+// necessarily the value currently sitting in the input.
+function updateResultsSpeedLabels(mph) {
+  const ms = mph * MPH_TO_MS;
+  const combined = `${mph} mph / ${ms.toFixed(1)} m/s`;
+  ['drag-force-speed-label', 'lift-force-speed-label'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = combined;
+  });
+
+  // Mirrors the droplet's VIS_SCALE_MAX so the legend matches the rendered image
+  const visScaleMax = Math.ceil((ms * 1.5) / 5) * 5;
+  ['flow-scale-max', 'streamlines-scale-max'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = visScaleMax;
+  });
+}
+
 // --- Event Listeners and Triggers ---
 function bindEvents() {
+  const raceSpeedInput = document.getElementById('race-speed-input');
+  if (raceSpeedInput) {
+    raceSpeedInput.value = raceSpeedMph;
+    raceSpeedInput.addEventListener('input', () => {
+      const parsed = parseFloat(raceSpeedInput.value);
+      if (isNaN(parsed) || parsed <= 0) return;
+      raceSpeedMph = Math.min(100, parsed);
+      updateRaceSpeedLabels();
+    });
+    raceSpeedInput.addEventListener('change', () => {
+      const parsed = parseFloat(raceSpeedInput.value);
+      raceSpeedMph = (isNaN(parsed) || parsed <= 0) ? DEFAULT_RACE_SPEED_MPH : Math.min(100, parsed);
+      raceSpeedInput.value = raceSpeedMph;
+      updateRaceSpeedLabels();
+    });
+  }
+  updateRaceSpeedLabels();
+  updateResultsSpeedLabels(raceSpeedMph);
+
   // Drag and Drop
   ['dragenter', 'dragover'].forEach(eventName => {
     dropzone.addEventListener(eventName, (e) => {
@@ -1713,7 +1768,8 @@ async function startCfdSimulation() {
       },
       body: JSON.stringify({
         fileKey: activeFileKey,
-        frontalArea: currentFrontalArea
+        frontalArea: currentFrontalArea,
+        raceSpeedMph: raceSpeedMph
       })
     });
     
@@ -2124,12 +2180,21 @@ function displayCfdResults(job) {
     fetchStreamlinesModel(job.jobId);
   }
   
+  // Reflect the speed the job actually ran at, which may differ from the
+  // current input value if the run was resumed after a reload.
+  const jobSpeedMph = job.raceSpeedMph || DEFAULT_RACE_SPEED_MPH;
+  raceSpeedMph = jobSpeedMph;
+  const raceSpeedInput = document.getElementById('race-speed-input');
+  if (raceSpeedInput) raceSpeedInput.value = raceSpeedMph;
+  updateRaceSpeedLabels();
+  updateResultsSpeedLabels(jobSpeedMph);
+
   const m = job.metrics;
   if (!m) return;
-  
+
   const density = 1.225; // kg/m³
-  const speed = 13.4;    // m/s (approx 30 mph Greenpower race speed)
-  
+  const speed = jobSpeedMph * MPH_TO_MS;
+
   const cdVal = m.cd !== undefined ? m.cd : 0;
   const clVal = m.cl !== undefined ? m.cl : 0;
   const cdaVal = m.cda !== undefined ? m.cda : (cdVal * (m.aref || 0.197));

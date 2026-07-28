@@ -42,6 +42,12 @@ app.use(express.static('public', {
   }
 }));
 
+const MPH_TO_MS = 0.44704;
+const DEFAULT_RACE_SPEED_MPH = 30;
+// Inlet velocity the OpenFOAM case template ships with; turbulence and
+// visualisation scales in the template are calibrated against it.
+const TEMPLATE_REF_SPEED_MS = 20;
+
 // AWS S3 Configuration
 const bucketName = process.env.S3_BUCKET_NAME;
 const region = process.env.AWS_REGION || 'eu-west-2';
@@ -248,7 +254,7 @@ const getJobState = async (jobId) => {
 
 // 1. POST /api/jobs: Queue/start simulation
 app.post('/api/jobs', requireAuth, async (req, res) => {
-  const { fileKey, frontalArea } = req.body;
+  const { fileKey, frontalArea, raceSpeedMph } = req.body;
   if (!fileKey) {
     return res.status(400).json({ error: 'fileKey is required' });
   }
@@ -258,6 +264,10 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
   const jobToken = crypto.randomBytes(16).toString('hex');
   const originalName = fileKey.substring(fileKey.indexOf('_') + 1);
   const cleanFrontalArea = typeof frontalArea === 'number' && !isNaN(frontalArea) && frontalArea > 0 ? frontalArea : null;
+  const cleanRaceSpeedMph = typeof raceSpeedMph === 'number' && !isNaN(raceSpeedMph) && raceSpeedMph > 0
+    ? Math.min(100, raceSpeedMph)
+    : DEFAULT_RACE_SPEED_MPH;
+  const raceSpeedMs = cleanRaceSpeedMph * MPH_TO_MS;
 
   const initialJobState = {
     jobId,
@@ -272,7 +282,8 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     dropletId: null,
     jobToken,
     metrics: null,
-    frontalArea: cleanFrontalArea
+    frontalArea: cleanFrontalArea,
+    raceSpeedMph: cleanRaceSpeedMph
   };
 
   try {
@@ -341,6 +352,10 @@ STL_KEY="${cleanFileKey}"
 TEMPLATE_KEY="case-template.zip"
 AWS_REGION="${region}"
 FRONTAL_AREA="${cleanFrontalArea !== null ? cleanFrontalArea : ''}"
+RACE_SPEED="${raceSpeedMs.toFixed(4)}"
+TURB_KE="${(0.24 * Math.pow(raceSpeedMs / TEMPLATE_REF_SPEED_MS, 2)).toFixed(5)}"
+TURB_OMEGA="${(1.78 * (raceSpeedMs / TEMPLATE_REF_SPEED_MS)).toFixed(5)}"
+VIS_SCALE_MAX="${(Math.ceil((raceSpeedMs * 1.5) / 5) * 5).toFixed(1)}"
 
 # Export AWS credentials immediately so all subshells/background loops inherit them
 export AWS_ACCESS_KEY_ID="${process.env.AWS_ACCESS_KEY_ID || ''}"
@@ -477,8 +492,21 @@ rm template.zip
 # Update frontal area (Aref) in system/forceCoeffs if provided
 if [ -n "$FRONTAL_AREA" ]; then
   echo "==> Updating Aref in system/forceCoeffs to $FRONTAL_AREA..."
-  sed -i "s|Aref[[:space:]]\{1,\}[0-9.]\{1,\};|Aref            \$FRONTAL_AREA;|g" system/forceCoeffs
+  sed -i -E "s|Aref[[:space:]]+[0-9.]+;|Aref            \$FRONTAL_AREA;|g" system/forceCoeffs
 fi
+
+# Apply the user-selected race speed to the inlet, the force-coefficient
+# reference velocity, and the turbulence inlet values (scaled to keep the
+# template's turbulence intensity constant).
+echo "==> Setting race speed to \$RACE_SPEED m/s..."
+sed -i -E "s|flowVelocity[[:space:]]+\\(.*\\);|flowVelocity         (\$RACE_SPEED 0 0);|g" 0/include/initialConditions
+sed -i -E "s|turbulentKE[[:space:]]+[0-9.]+;|turbulentKE          \$TURB_KE;|g" 0/include/initialConditions
+sed -i -E "s|turbulentOmega[[:space:]]+[0-9.]+;|turbulentOmega       \$TURB_OMEGA;|g" 0/include/initialConditions
+sed -i -E "s|magUInf[[:space:]]+[0-9.]+;|magUInf         \$RACE_SPEED;|g" system/forceCoeffs
+
+# Keep the visualisation colour scales in step with the inlet velocity
+sed -i -E "s|vmax=[0-9.]+|vmax=\$VIS_SCALE_MAX|g" generate_slice.py
+sed -i -E "s|RescaleTransferFunction\\(0.0, [0-9.]+\\)|RescaleTransferFunction(0.0, \$VIS_SCALE_MAX)|g" render_flow.py
 
 # Adjust Allrun shebang to bash and insert solver status update
 sed -i '1s|#!/bin/sh|#!/bin/bash|' Allrun
@@ -818,7 +846,7 @@ app.post('/api/jobs/:id/callback', async (req, res) => {
   if (error) jobState.error = error;
   if (metrics) {
     if (metrics.cda) {
-      const raceSpeed = 13.4;
+      const raceSpeed = (jobState.raceSpeedMph || DEFAULT_RACE_SPEED_MPH) * MPH_TO_MS;
       metrics.dragForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cda).toFixed(1));
       if (metrics.cla) {
         metrics.liftForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cla).toFixed(1));
