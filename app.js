@@ -293,11 +293,20 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     if (!doToken) {
       return res.status(400).json({ error: 'DigitalOcean credentials are not configured on the server. Cannot run CFD simulation.' });
     }
-    const doSnapshotName = process.env.DIGITALOCEAN_SNAPSHOT_NAME || 'openfoam-base';
+    // Deliberately no default: an unset value used to fall back to a
+    // hard-coded name, which silently booted a stale image (one without
+    // ParaView) and produced jobs that "succeeded" while missing their 3D
+    // streamlines artifacts. Fail loudly instead.
+    const doSnapshotName = process.env.DIGITALOCEAN_SNAPSHOT_NAME;
+    if (!doSnapshotName && !process.env.DIGITALOCEAN_IMAGE_ID) {
+      return res.status(400).json({
+        error: 'DIGITALOCEAN_SNAPSHOT_NAME is not configured on the server. Set it (or pin DIGITALOCEAN_IMAGE_ID) before running a CFD simulation.'
+      });
+    }
 
     // Real DigitalOcean launch
     console.log(`Provisioning DigitalOcean droplet for job ${jobId}...`);
-    
+
     // Resolve Snapshot ID
     let snapshotId = process.env.DIGITALOCEAN_IMAGE_ID;
     if (!snapshotId) {

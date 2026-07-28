@@ -82,6 +82,7 @@ When deploying the Express application as a serverless Lambda:
 - Do not pack your `.env` file containing credentials.
 - Assign an **IAM Execution Role** to the Lambda function containing read/write permissions for your S3 bucket. The AWS SDK will automatically assume this role to request S3 credentials securely.
 - Define `S3_BUCKET_NAME`, `AWS_REGION`, and the DigitalOcean configuration keys (`DIGITALOCEAN_TOKEN`, `DIGITALOCEAN_PROJECT_ID`, etc.) as **GitHub Secrets** when deploying via GitHub Actions, or configure them directly in the AWS Lambda Environment Variables console. These are mapped in `serverless.yaml` and `.github/workflows/deploy.yml` to automate their injection during deployment.
+- **`DIGITALOCEAN_SNAPSHOT_NAME` is required and has no default.** Job creation returns an error if neither it nor `DIGITALOCEAN_IMAGE_ID` is set, rather than falling back to a hard-coded snapshot name. Keep this value in step with the snapshot you actually want booted — pointing it at an image that predates the ParaView install produces jobs that complete normally but silently omit the 3D streamlines artifacts, since that step is skipped gracefully when `pvpython`/`xvfb-run` are missing.
 
 ---
 
