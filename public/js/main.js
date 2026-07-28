@@ -1759,6 +1759,38 @@ async function startCfdSimulation() {
     Launching Droplet...
   `;
   
+  // Provide an immediate visual update in the Simulation Logs & Progress section
+  showCfdMonitor(true);
+  showCfdResults(false);
+
+  const statusBadge = document.getElementById('cfd-status-badge');
+  const progressFill = document.getElementById('cfd-progress-fill');
+  if (statusBadge) {
+    statusBadge.textContent = 'Preparing';
+    statusBadge.style.background = 'rgba(0, 240, 255, 0.1)';
+    statusBadge.style.borderColor = 'var(--accent-cyan)';
+    statusBadge.style.color = 'var(--accent-cyan)';
+  }
+  if (progressFill) {
+    progressFill.style.width = '5%';
+    progressFill.style.background = 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple))';
+  }
+
+  const consoleEl = document.getElementById('cfd-console');
+  if (consoleEl) {
+    consoleEl.textContent = 'Preparing simulation environment and requesting compute resources...\n';
+  }
+
+  const engineStatus = document.getElementById('engine-status');
+  const engineStatusVal = document.getElementById('engine-status-val');
+  if (engineStatus && engineStatusVal) {
+    engineStatus.className = 'status-indicator online';
+    engineStatusVal.textContent = 'Preparing';
+  }
+
+  // Instantly switch view to Stage 3 progress panel
+  switchStage(3);
+
   try {
     const response = await fetch('/api/jobs', {
       method: 'POST',
@@ -1786,8 +1818,7 @@ async function startCfdSimulation() {
     activeJobId = job.jobId;
     localStorage.setItem('caucsim_active_job_id', activeJobId);
     
-    // Reset and show console/monitor
-    const consoleEl = document.getElementById('cfd-console');
+    // Reset and show console/monitor with updated status
     if (consoleEl) {
       consoleEl.textContent = 'Launching droplet and configuring OpenFOAM environment...\n';
     }
@@ -1798,12 +1829,31 @@ async function startCfdSimulation() {
     // Start polling
     startCfdPolling();
     
-    // Switch to Stage 3
+    // Ensure we stay on Stage 3 with the actual job state
     switchStage(3);
     
   } catch (err) {
     console.error(err);
     alert(`CFD Launch Error: ${err.message}`);
+
+    // Reset status indicators and append error details to console
+    if (statusBadge) {
+      statusBadge.textContent = 'Failed';
+      statusBadge.style.background = 'rgba(255, 61, 0, 0.1)';
+      statusBadge.style.borderColor = '#ff3d00';
+      statusBadge.style.color = '#ff3d00';
+    }
+    if (progressFill) {
+      progressFill.style.width = '0%';
+    }
+    if (consoleEl) {
+      consoleEl.textContent += `\n[ERROR] CFD Simulation failed to start: ${err.message}\n`;
+    }
+    if (engineStatus && engineStatusVal) {
+      engineStatus.className = 'status-indicator standby';
+      engineStatusVal.textContent = 'Standby';
+    }
+
     btnRunCfd.disabled = false;
     btnRunCfd.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
