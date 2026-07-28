@@ -25,7 +25,7 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 
 ### 3. Serverless Storage Architecture (AWS S3)
 - **Direct-to-S3 Uploads:** Eliminates `multer` and multipart/form parsing. The Express server generates cryptographically signed PUT/GET URLs via the `@aws-sdk/s3-request-presigner` and the client PUTs the binary payload directly to AWS S3.
-- **Dynamic Connection Status Indicators:** The header bar dynamically updates to show connection states for the Local Server, CAD Storage (complete with S3 bucket name tooltips), and the **OpenFOAM Engine** (which transitions between `Standby`, `Queued`, `Initializing`, `Meshing`, `Solving`, and `Processing` in real time).
+- **Dynamic Connection Status Indicators:** The header bar dynamically updates to show connection states for CAD Storage (complete with S3 bucket name tooltips) and the **OpenFOAM Engine** (which transitions between `Standby`, `Queued`, `Initializing`, `Meshing`, `Solving`, and `Processing` in real time).
 
 ### 4. Authentication via AWS Cognito
 - **Secure Sign In:** Protects sensitive CAD files and simulation endpoints. The frontend communicates directly with AWS Cognito User Pools (via HTTP fetch) to exchange credentials for ID tokens.
