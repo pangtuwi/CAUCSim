@@ -442,5 +442,15 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
       expect(response.headers.location).toContain('/flow_3d_streamlines.gltf');
     });
+
+    it('should redirect to download signed URL when json query param is not provided', async () => {
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/download`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
+      expect(response.headers.location).toContain('/results.zip');
+    });
   });
 });
