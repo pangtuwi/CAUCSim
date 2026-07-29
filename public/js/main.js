@@ -1547,10 +1547,17 @@ function validateSession() {
 function handleLogout() {
   idToken = null;
   localStorage.removeItem('caucsim_id_token');
-  
+
+  // Reset the engine indicator. Callers can reach here mid-run (a 401 from
+  // startCfdSimulation returns before its own error handling, and the poll
+  // loop logs out on 401), which would otherwise strand the header showing a
+  // live stage like "Preparing" while the user sits at the login modal.
+  updateEngineStatus(null);
+  showCfdMonitor(false);
+
   // Reset active geometry
   resetActiveGeometry();
-  
+
   libraryList.innerHTML = '';
   libraryEmpty.style.display = 'block';
 
