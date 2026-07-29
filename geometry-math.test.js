@@ -21,6 +21,18 @@ eval(`
   calculateSurfaceArea = ${calculateSurfaceAreaSource}
 `);
 
+// Extract calculateVolume function.
+const calculateVolumeSourceMatch = mainJsSource.match(/function calculateVolume\(geometry\) \{[\s\S]*?return Math\.abs\(volume\);\n\}/);
+if (!calculateVolumeSourceMatch) {
+  console.error("Could not find calculateVolume function in main.js");
+  process.exit(1);
+}
+const calculateVolumeSource = calculateVolumeSourceMatch[0];
+let calculateVolume;
+eval(`
+  calculateVolume = ${calculateVolumeSource}
+`);
+
 describe('Geometry Math Functions - calculateSurfaceArea', () => {
   it('calculates the surface area of a 1x1x1 box correctly (indexed)', () => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -57,5 +69,44 @@ describe('Geometry Math Functions - calculateSurfaceArea', () => {
   it('throws an error if geometry has no position attribute', () => {
     const geometry = new THREE.BufferGeometry();
     expect(() => calculateSurfaceArea(geometry)).toThrow();
+  });
+});
+
+describe('Geometry Math Functions - calculateVolume', () => {
+  it('calculates the volume of a 1x1x1 box correctly (indexed)', () => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const volume = calculateVolume(geometry);
+    expect(volume).toBeCloseTo(1, 5);
+  });
+
+  it('calculates the volume of a 2x3x4 box correctly (indexed)', () => {
+    const geometry = new THREE.BoxGeometry(2, 3, 4);
+    const volume = calculateVolume(geometry);
+    // Volume = 2 * 3 * 4 = 24
+    expect(volume).toBeCloseTo(24, 5);
+  });
+
+  it('calculates the volume of a non-indexed box correctly', () => {
+    const geometry = new THREE.BoxGeometry(2, 3, 4).toNonIndexed();
+    const volume = calculateVolume(geometry);
+    expect(volume).toBeCloseTo(24, 5);
+  });
+
+  it('calculates the volume of a flat plane correctly as 0', () => {
+    const geometry = new THREE.PlaneGeometry(10, 10);
+    const volume = calculateVolume(geometry);
+    // Plane has no volume
+    expect(volume).toBeCloseTo(0, 5);
+  });
+
+  it('calculates volume as 0 for a geometry with 0,0,0 dimensions', () => {
+    const geometry = new THREE.BoxGeometry(0, 0, 0);
+    const volume = calculateVolume(geometry);
+    expect(volume).toBe(0);
+  });
+
+  it('throws an error if geometry has no position attribute', () => {
+    const geometry = new THREE.BufferGeometry();
+    expect(() => calculateVolume(geometry)).toThrow();
   });
 });
