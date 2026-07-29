@@ -79,7 +79,7 @@ This metadata file acts as the single source of truth for the frontend state mac
 *   **Job Parameters:**
     *   `fileKey` - S3 key for the uploaded STL geometry source file.
     *   `originalName` - The original user-visible filename of the geometry.
-    *   `frontalArea` - User-provided reference frontal area ($m^2$, optional).
+    *   `frontalArea` - Projected frontal area ($m^2$) computed automatically on the client during geometry analysis (`calculateFrontalArea`, a Y-Z plane rasterization) and submitted with the job. Not user-entered. Null if the value was unavailable or non-positive at submission.
     *   `raceSpeedMph` - User-selected race speed in miles per hour (persisted per job, defaults to 30 mph).
 *   **Timestamps & Infrastructure:**
     *   `startedAt`, `updatedAt`, `completedAt` - ISO 8601 timestamps of job milestones.
@@ -107,7 +107,7 @@ This metadata file acts as the single source of truth for the frontend state mac
     3.  **Turbulence Scaling:** The turbulence parameters (`turbulentKE` and `turbulentOmega` in `0/include/initialConditions`) are scaled relative to the template's reference speed (20 m/s) to keep the template's turbulence intensity constant:
         *   $k = 0.24 \times \left(\frac{U_{\infty}}{U_{\text{ref}}}\right)^2$
         *   $\omega = 1.78 \times \left(\frac{U_{\infty}}{U_{\text{ref}}}\right)$
-    4.  **Reference Values for Forces:** The Reference Velocity (`magUInf`) in `system/forceCoeffs` is updated to match the converted race speed. If the user provided a custom Frontal Area, `Aref` is updated in `system/forceCoeffs` as well.
+    4.  **Reference Values for Forces:** The Reference Velocity (`magUInf`) in `system/forceCoeffs` is updated to match the converted race speed. If a computed frontal area was submitted with the job, `Aref` is updated in `system/forceCoeffs` as well; otherwise the case template's default `Aref` is left in place.
     5.  **Visualization Scale Synchronization:** To ensure readable visualization scales, the maximum velocity scale limit (`vmax` in `generate_slice.py` and `RescaleTransferFunction` in `render_flow.py`) is scaled according to the race speed to keep the visual scales matching the actual flow speed.
 
 ---

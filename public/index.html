@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.40</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.41</span></p>
         </div>
       </div>
       
@@ -61,17 +61,39 @@
         <div class="workflow-card active" id="card-stage-1">
           <div class="workflow-card-header" onclick="switchStage(1)">
             <span class="step-num">01</span>
-            <h2>Select CAD Model</h2>
+            <h2>CAD Model Selection</h2>
             <span class="accordion-icon"></span>
           </div>
           <div class="workflow-card-body">
-            <div class="upload-dropzone" id="dropzone">
+            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+              Pick a CAD model from the list, or upload a new one below, then ensure units are correct.
+            </p>
+            <div class="model-list-wrapper" style="max-height: 180px; overflow-y: auto;">
+              <div class="model-list-empty" id="library-empty" style="display: none; padding: 15px; text-align: center; color: var(--text-secondary); font-size: 11px;">No STL files found.</div>
+              <ul class="model-list" id="library-list" style="list-style: none; padding: 0; margin: 0;">
+                <li class="loading-placeholder" style="padding: 10px; color: var(--text-secondary); font-size: 11px; text-align: center;">Loading geometries...</li>
+              </ul>
+            </div>
+
+            <div class="import-options" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+              <label for="unit-select" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Model Units:</label>
+              <select id="unit-select" class="select-field" style="flex: 1; min-width: 0; font-size: 10px;">
+                <option value="m" selected>Meters (m)</option>
+                <option value="mm">Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="in">Inches (in)</option>
+              </select>
+              <button class="btn-icon" id="refresh-library-btn" title="Refresh library" style="flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; cursor: pointer; color: var(--text-secondary);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="upload-dropzone" id="dropzone" style="margin-top: 15px;">
               <input type="file" id="file-input" accept=".stl" style="display: none;">
               <div class="dropzone-content">
-                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                </svg>
-                <p class="primary-text">Drag & drop F24 CAD geometry</p>
+                <p class="primary-text">Drag & drop new CAD model</p>
                 <p class="secondary-text">or <span class="browse-link">browse files</span></p>
                 <span class="file-limits">Supports STL (max 500MB)</span>
               </div>
@@ -85,33 +107,9 @@
                 </div>
               </div>
             </div>
-            
-            <div class="import-options" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
-              <label for="unit-select" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Model Units:</label>
-              <select id="unit-select" class="select-field" style="width: 55%; font-size: 10px;">
-                <option value="m" selected>Meters (m)</option>
-                <option value="mm">Millimeters (mm)</option>
-                <option value="cm">Centimeters (cm)</option>
-                <option value="in">Inches (in)</option>
-              </select>
-            </div>
 
-            <div class="library-search" style="margin-top: 15px; display: flex; gap: 8px;">
-              <input type="text" id="library-search-input" placeholder="Search library..." class="select-field" style="flex: 1; font-size: 11px;">
-              <button class="btn-icon" id="refresh-library-btn" title="Refresh library" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; cursor: pointer; color: var(--text-secondary);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-              </button>
-            </div>
-            <div class="model-list-wrapper" style="margin-top: 10px; max-height: 180px; overflow-y: auto;">
-              <div class="model-list-empty" id="library-empty" style="display: none; padding: 15px; text-align: center; color: var(--text-secondary); font-size: 11px;">No STL files found.</div>
-              <ul class="model-list" id="library-list" style="list-style: none; padding: 0; margin: 0;">
-                <li class="loading-placeholder" style="padding: 10px; color: var(--text-secondary); font-size: 11px; text-align: center;">Loading geometries...</li>
-              </ul>
-            </div>
             <button class="btn-primary" id="btn-analyse-geometry" disabled style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px; margin-top: 15px;">
-              Analyse Geometry
+              Check Geometry
             </button>
           </div>
         </div>
@@ -120,13 +118,19 @@
         <div class="workflow-card disabled" id="card-stage-2">
           <div class="workflow-card-header" onclick="switchStage(2)">
             <span class="step-num">02</span>
-            <h2>Check Geometry</h2>
+            <h2>Geometry Check</h2>
             <span class="accordion-icon"></span>
           </div>
           <div class="workflow-card-body">
             <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
               Review model dimensions and verify regulations checklist on the right.
             </p>
+            <button class="btn-primary" id="btn-continue-to-cfd" style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px; margin-top: 15px;">
+              Continue to Simulation
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-left: 8px;">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -134,7 +138,7 @@
         <div class="workflow-card disabled" id="card-stage-3">
           <div class="workflow-card-header" onclick="switchStage(3)">
             <span class="step-num">03</span>
-            <h2>Run CFD Simulation</h2>
+            <h2>CFD Simulation</h2>
             <span class="accordion-icon"></span>
           </div>
           <div class="workflow-card-body">
@@ -161,7 +165,7 @@
         <div class="workflow-card disabled" id="card-stage-4">
           <div class="workflow-card-header" onclick="switchStage(4)">
             <span class="step-num">04</span>
-            <h2>Analyse Results</h2>
+            <h2>Results Analysis</h2>
             <span class="accordion-icon"></span>
           </div>
           <div class="workflow-card-body">
@@ -335,7 +339,7 @@
         <div class="stage-data-panel active" id="data-stage-1" style="height: 100%; display: flex; flex-direction: column;">
           <div class="panel-section" style="border-bottom: none; display: flex; flex-direction: column; flex: 1;">
             <div class="section-header">
-              <h2>Active Model Details</h2>
+              <h2>Active CAD Model Details</h2>
             </div>
             <div class="stage-data-content" id="import-details-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; color: var(--text-secondary); padding: 40px 20px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
@@ -486,10 +490,18 @@
         <div class="stage-data-panel" id="data-stage-3" style="display: none; height: 100%; max-height: 100%; overflow: hidden;">
           <section class="panel-section" style="height: 100%; max-height: 100%; display: flex; flex-direction: column; border-bottom: none; overflow: hidden;">
             <div class="section-header">
-              <h2>Simulation Logs & Progress</h2>
+              <h2>Simulation Status</h2>
             </div>
             
-            <div class="cfd-monitor" id="cfd-monitor" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
+            <div class="stage-data-content" id="cfd-monitor-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+              <p style="font-size: 11px; line-height: 1.5; margin: 0;">No simulation in progress.<br>Start a run from the CFD Simulation panel to see live progress and logs here.</p>
+            </div>
+
+            <div class="cfd-monitor" id="cfd-monitor" style="display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
               <div class="monitor-status-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;">
                 <span class="monitor-status-label" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase;">Status:</span>
                 <span class="status-badge standby" id="cfd-status-badge" style="font-size: 11px; font-weight: 600; background: rgba(255, 170, 0, 0.1); border: 1px solid #ffaa00; color: #ffaa00; padding: 2px 8px; border-radius: 12px;">Ready to Run</span>
@@ -509,11 +521,19 @@
 
         <!-- Stage 4 Data: CFD Results Summary -->
         <div class="stage-data-panel" id="data-stage-4" style="display: none; height: 100%; overflow-y: auto;">
-          <section class="panel-section results-summary-section" style="border-bottom: none;">
+          <section class="panel-section results-summary-section" style="border-bottom: none; display: flex; flex-direction: column; height: 100%;">
             <div class="section-header">
               <h2>Aerodynamic Summary</h2>
             </div>
-            
+
+            <div class="stage-data-content" id="results-details-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
+                <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
+              </svg>
+              <p style="font-size: 11px; line-height: 1.5; margin: 0;">Simulation not yet run.<br>Run a CFD simulation in Stage 3 to see aerodynamic results here.</p>
+            </div>
+
+            <div class="stage-data-content" id="results-details-loaded" style="display: none;">
             <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
               <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
                 <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Drag Coeff (Cd)</span>
@@ -546,6 +566,7 @@
                 <span class="label" style="font-size: 11px; color: var(--text-secondary); font-weight: 600;">Aero Power Required:</span>
                 <span class="val" id="cfd-power" style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-cyan);">-</span>
               </div>
+            </div>
             </div>
           </section>
         </div>

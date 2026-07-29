@@ -273,7 +273,7 @@ body {
   border: 2px dashed rgba(0, 240, 255, 0.25);
   background: var(--bg-tertiary);
   border-radius: 12px;
-  padding: 28px 16px;
+  padding: 14px 16px;
   text-align: center;
   cursor: pointer;
   position: relative;
@@ -295,21 +295,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   transition: var(--transition-smooth);
-}
-
-.upload-icon {
-  width: 42px;
-  height: 42px;
-  color: var(--accent-cyan);
-  filter: drop-shadow(0 0 6px var(--accent-cyan-glow));
-  margin-bottom: 6px;
-  transition: var(--transition-smooth);
-}
-
-.upload-dropzone:hover .upload-icon {
-  transform: translateY(-4px);
 }
 
 .upload-dropzone .primary-text {
@@ -416,24 +403,6 @@ body {
 
 .library-search {
   margin-bottom: 12px;
-}
-
-.library-search input {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 8px 12px;
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 12px;
-  transition: var(--transition-fast);
-}
-
-.library-search input:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.1);
 }
 
 .model-list-wrapper {

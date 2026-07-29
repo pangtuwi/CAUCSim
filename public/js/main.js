@@ -50,7 +50,6 @@ const progressPercent = progressBar.querySelector('.progress-percent');
 const progressFilename = progressBar.querySelector('.progress-filename');
 const libraryList = document.getElementById('library-list');
 const libraryEmpty = document.getElementById('library-empty');
-const searchInput = document.getElementById('library-search-input');
 const refreshBtn = document.getElementById('refresh-library-btn');
 const cadViewportContainer = document.getElementById('cad-viewport-container');
 const graphicalResultsPanel = document.getElementById('graphical-results-panel');
@@ -109,7 +108,14 @@ function switchStage(stageNum) {
     console.warn(`Stage ${stageNum} is currently locked.`);
     return;
   }
-  
+
+  // Reaching Stage 2 is what opens up the CFD stage: the user has to look at
+  // the geometry checks before they can run a simulation. Unlocked before the
+  // card/panel loops below so Stage 3 loses its disabled styling in this pass.
+  if (stageNum === 2) {
+    unlockStage(3);
+  }
+
   activeStage = stageNum;
   
   // 1. Update left accordion cards styling
@@ -970,8 +976,9 @@ function computeStats(geometry, size) {
     regSummary.className = 'reg-summary-box fail';
   }
 
-  // Unlock Stage 3 since analysis is complete
-  unlockStage(3);
+  // Stage 3 is deliberately NOT unlocked here. Completing the checks only
+  // makes Stage 2 worth reading; the user has to actually visit Stage 2
+  // before the CFD stage opens up (see switchStage).
 }
 
 function calculateSurfaceArea(geometry) {
@@ -1372,19 +1379,6 @@ function bindEvents() {
   // Library Refresh
   refreshBtn.addEventListener('click', () => fetchLibrary());
 
-  // Search filter
-  searchInput.addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase();
-    document.querySelectorAll('.model-item').forEach(item => {
-      const name = item.querySelector('.model-item-name').textContent.toLowerCase();
-      if (name.includes(query)) {
-        item.style.display = 'flex';
-      } else {
-        item.style.display = 'none';
-      }
-    });
-  });
-
   // Results Panel Page Tabs
   document.querySelectorAll('[data-results-page]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1477,6 +1471,15 @@ function bindEvents() {
   if (btnAnalyseGeometry) {
     btnAnalyseGeometry.addEventListener('click', () => {
       switchStage(2);
+    });
+  }
+
+  // Continue to Simulation button listener. Stage 3 was unlocked on arrival at
+  // Stage 2, so this only moves the user along rather than gating.
+  const btnContinueToCfd = document.getElementById('btn-continue-to-cfd');
+  if (btnContinueToCfd) {
+    btnContinueToCfd.addEventListener('click', () => {
+      switchStage(3);
     });
   }
 
@@ -1740,8 +1743,15 @@ let isConsoleCollapsed = false;
 let activeFlowImageUrl = null;
 
 function showCfdMonitor(show) {
+  // 'flex', not 'block': the monitor is a flex column and its console child
+  // relies on flex: 1 to fill the remaining height.
   const el = document.getElementById('cfd-monitor');
-  if (el) el.style.display = show ? 'block' : 'none';
+  if (el) el.style.display = show ? 'flex' : 'none';
+
+  // Placeholder fills the panel whenever no run is being monitored, so the
+  // status panel is never blank.
+  const emptyEl = document.getElementById('cfd-monitor-empty');
+  if (emptyEl) emptyEl.style.display = show ? 'none' : 'flex';
 }
 
 function showCfdResults(show) {
@@ -2227,9 +2237,17 @@ async function fetchStreamlinesModel(jobId) {
   }
 }
 
+function showResultsSummary(hasResults) {
+  const emptyEl = document.getElementById('results-details-empty');
+  const loadedEl = document.getElementById('results-details-loaded');
+  if (emptyEl) emptyEl.style.display = hasResults ? 'none' : 'flex';
+  if (loadedEl) loadedEl.style.display = hasResults ? 'block' : 'none';
+}
+
 function displayCfdResults(job) {
   showCfdMonitor(false);
   showCfdResults(true);
+  showResultsSummary(true);
 
   if (job && job.jobId) {
     fetchFlowVisualisation(job.jobId);
@@ -2309,6 +2327,7 @@ function clearCfdRun() {
   localStorage.removeItem('caucsim_active_job_id');
   showCfdMonitor(false);
   showCfdResults(false);
+  showResultsSummary(false);
   updateEngineStatus(null);
   
   // Clear flow visualization state

@@ -65,8 +65,12 @@ describe('Execution Log UI Auto-Scroll and Layout', () => {
     expect(sectionStyle.height).toBe('100%');
     expect(sectionStyle.overflow).toBe('hidden');
 
-    // The monitor element MUST also fill height via flex and NOT overflow
-    expect(monitorStyle.display).toBe('flex');
+    // The monitor starts hidden behind the "no simulation in progress"
+    // placeholder; showCfdMonitor swaps the two (covered by the test below).
+    expect(monitorStyle.display).toBe('none');
+    expect(document.getElementById('cfd-monitor-empty')).toBeTruthy();
+
+    // The monitor element MUST still fill height via flex and NOT overflow
     expect(monitorStyle.flexDirection).toBe('column');
     expect(monitorStyle.minHeight).toBe('0');
     expect(monitorStyle.height).toBe('');
@@ -74,6 +78,28 @@ describe('Execution Log UI Auto-Scroll and Layout', () => {
 
     // The console element MUST have overflow-y set to auto to enable a scrollbar
     expect(consoleStyle.overflowY).toBe('auto');
+  });
+
+  it('showCfdMonitor reveals the monitor as a flex column, not a block', () => {
+    // Extracted from main.js so the real implementation is under test.
+    const src = fs.readFileSync(path.resolve(__dirname, 'public/js/main.js'), 'utf8');
+    const match = src.match(/function showCfdMonitor\(show\) \{[\s\S]*?\n\}/);
+    expect(match).toBeTruthy();
+
+    let showCfdMonitor;
+    eval(`showCfdMonitor = ${match[0]}`);
+
+    const emptyEl = document.getElementById('cfd-monitor-empty');
+
+    showCfdMonitor(true);
+    // 'block' would drop the flex context and collapse the log to its
+    // min-height instead of letting flex: 1 fill the panel.
+    expect(monitorEl.style.display).toBe('flex');
+    expect(emptyEl.style.display).toBe('none');
+
+    showCfdMonitor(false);
+    expect(monitorEl.style.display).toBe('none');
+    expect(emptyEl.style.display).toBe('flex');
   });
 
   it('should scroll to the bottom when text is appended and scrollConsoleToBottom is called', () => {
