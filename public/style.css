@@ -1214,16 +1214,7 @@ body {
   }
 }
 
-/* Center Column Graphical Results Styling */
-.graphical-results-container {
-  background: var(--bg-secondary);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-sizing: border-box;
-  animation: viewportFadeIn 0.4s ease;
-}
-
+/* Aerodynamic Summary Chart Sub-panels (Right Column) */
 .chart-svg-wrapper {
   width: 100%;
   height: 100%;

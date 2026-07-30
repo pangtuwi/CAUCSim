@@ -51,8 +51,6 @@ const progressFilename = progressBar.querySelector('.progress-filename');
 const libraryList = document.getElementById('library-list');
 const libraryEmpty = document.getElementById('library-empty');
 const refreshBtn = document.getElementById('refresh-library-btn');
-const cadViewportContainer = document.getElementById('cad-viewport-container');
-const graphicalResultsPanel = document.getElementById('graphical-results-panel');
 
 // Auth Elements
 const authModal = document.getElementById('auth-modal');
@@ -150,20 +148,11 @@ function switchStage(stageNum) {
     }
   }
   
-  // 3. Update middle column visibility (CAD Viewport vs Charts)
-  if (cadViewportContainer && graphicalResultsPanel) {
-    if (activeStage === 4) {
-      cadViewportContainer.style.display = 'none';
-      graphicalResultsPanel.style.display = 'flex';
-      switchResultsPage('charts');
-    } else {
-      cadViewportContainer.style.display = 'flex';
-      graphicalResultsPanel.style.display = 'none';
-      // Trigger canvas resize to ensure Three.js adapts correctly
-      if (renderer && camera) {
-        onWindowResize();
-      }
-    }
+  // 3. Stage 4's charts live in the right-hand summary panel, which was
+  // display:none until the loop above -- SVG sizing measures clientWidth, so
+  // render only once the panel is visible.
+  if (activeStage === 4) {
+    renderPerformanceCharts();
   }
 }
 window.switchStage = switchStage;
@@ -185,23 +174,6 @@ function lockStage(stageNum) {
   }
 }
 window.lockStage = lockStage;
-
-// --- Results Panel Page Switching ---
-function switchResultsPage(pageName) {
-  const pages = ['charts', 'flow', 'streamlines'];
-  pages.forEach(p => {
-    const pageEl = document.getElementById(`results-page-${p}`);
-    if (pageEl) pageEl.style.display = p === pageName ? 'flex' : 'none';
-    const tabBtn = document.querySelector(`[data-results-page="${p}"]`);
-    if (tabBtn) tabBtn.classList.toggle('active', p === pageName);
-  });
-  if (pageName === 'charts') {
-    // Charts are SVG-measured off their container's clientWidth/Height, which
-    // is 0 while display:none -- re-render now that the page is visible.
-    renderPerformanceCharts();
-  }
-}
-window.switchResultsPage = switchResultsPage;
 
 // --- SVG Performance Charts Rendering ---
 function renderPerformanceCharts() {
@@ -396,8 +368,7 @@ window.renderPerformanceCharts = renderPerformanceCharts;
 
 // Window resize handler for performance charts
 window.addEventListener('resize', () => {
-  const chartsPageEl = document.getElementById('results-page-charts');
-  if (activeStage === 4 && chartsPageEl && chartsPageEl.style.display !== 'none') {
+  if (activeStage === 4) {
     renderPerformanceCharts();
   }
 });
@@ -1315,10 +1286,8 @@ function updateResultsSpeedLabels(mph) {
 
   // Mirrors the droplet's VIS_SCALE_MAX so the legend matches the rendered image
   const visScaleMax = Math.ceil((ms * 1.5) / 5) * 5;
-  ['flow-scale-max', 'streamlines-scale-max'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = visScaleMax;
-  });
+  const flowScaleEl = document.getElementById('flow-scale-max');
+  if (flowScaleEl) flowScaleEl.textContent = visScaleMax;
 }
 
 // --- Event Listeners and Triggers ---
@@ -1377,13 +1346,6 @@ function bindEvents() {
 
   // Library Refresh
   refreshBtn.addEventListener('click', () => fetchLibrary());
-
-  // Results Panel Page Tabs
-  document.querySelectorAll('[data-results-page]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      switchResultsPage(e.target.dataset.resultsPage);
-    });
-  });
 
   // Shading Modes
   document.querySelectorAll('[data-render-mode]').forEach(btn => {
@@ -1450,11 +1412,7 @@ function bindEvents() {
   const toggleStreamlinesBtn = document.getElementById('toggle-streamlines');
   streamlinesToggleActive = toggleStreamlinesBtn.classList.contains('active');
   toggleStreamlinesBtn.addEventListener('click', () => {
-    toggleStreamlinesBtn.classList.toggle('active');
-    streamlinesToggleActive = toggleStreamlinesBtn.classList.contains('active');
-    if (activeStreamlineScene) {
-      activeStreamlineScene.visible = streamlinesToggleActive;
-    }
+    setStreamlinesVisible(!streamlinesToggleActive);
   });
 
   // Unit Mode Selector change
@@ -2130,66 +2088,14 @@ async function fetchFlowVisualisation(jobId) {
   }
 }
 
-async function fetchStreamlinesVisualisation(jobId) {
-  const imgEl = document.getElementById('streamlines-visualisation-img');
-  const placeholderEl = document.getElementById('streamlines-visualisation-placeholder');
-  const placeholderTextEl = document.getElementById('streamlines-visualisation-placeholder-text');
-  const loadingEl = document.getElementById('streamlines-visualisation-loading');
-
-  if (!imgEl || !placeholderEl || !loadingEl) return;
-
-  if (placeholderTextEl) {
-    placeholderTextEl.textContent = 'No visualisation image available';
-  }
-
-  imgEl.onload = null;
-  imgEl.onerror = null;
-  imgEl.src = '';
-
-  imgEl.style.display = 'none';
-  placeholderEl.style.display = 'none';
-  loadingEl.style.display = 'flex';
-
-  try {
-    const res = await fetch(`/api/jobs/${jobId}/streamlines-image?json=true`, {
-      headers: {
-        'Authorization': `Bearer ${idToken || ''}`
-      }
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-
-      imgEl.onload = () => {
-        imgEl.style.display = 'block';
-        loadingEl.style.display = 'none';
-        placeholderEl.style.display = 'none';
-      };
-
-      imgEl.onerror = () => {
-        imgEl.style.display = 'none';
-        loadingEl.style.display = 'none';
-        placeholderEl.style.display = 'flex';
-        if (placeholderTextEl) {
-          placeholderTextEl.textContent = 'Visualisation image was not generated or failed to load';
-        }
-      };
-
-      imgEl.src = data.url;
-    } else {
-      loadingEl.style.display = 'none';
-      placeholderEl.style.display = 'flex';
-      if (placeholderTextEl) {
-        placeholderTextEl.textContent = 'Visualisation image was not generated for this simulation run';
-      }
-    }
-  } catch (err) {
-    console.error("Failed to load streamlines visualisation:", err);
-    loadingEl.style.display = 'none';
-    placeholderEl.style.display = 'flex';
-    if (placeholderTextEl) {
-      placeholderTextEl.textContent = 'Failed to fetch streamlines visualisation';
-    }
+// Keeps the viewport toolbar toggle button, the state flag, and the loaded
+// streamline scene's visibility in sync from every call site.
+function setStreamlinesVisible(visible) {
+  streamlinesToggleActive = visible;
+  const btn = document.getElementById('toggle-streamlines');
+  if (btn) btn.classList.toggle('active', visible);
+  if (activeStreamlineScene) {
+    activeStreamlineScene.visible = visible;
   }
 }
 
@@ -2198,6 +2104,7 @@ function clearStreamlineScene() {
     scene.remove(activeStreamlineScene);
     activeStreamlineScene = null;
   }
+  setStreamlinesVisible(false);
 }
 
 async function fetchStreamlinesModel(jobId) {
@@ -2218,9 +2125,11 @@ async function fetchStreamlinesModel(jobId) {
       // ParaView exports in meters; the app's world units are millimeters (matches loadSTL's m->mm scaling)
       streamlineScene.scale.set(1000, 1000, 1000);
       streamlineScene.position.set(0, 0, 0);
-      streamlineScene.visible = streamlinesToggleActive;
       activeStreamlineScene = streamlineScene;
       scene.add(streamlineScene);
+      // Streamlines are only viewable here on the car model, so show them as
+      // soon as the run's model arrives; the toolbar toggle can hide them.
+      setStreamlinesVisible(true);
     }, undefined, (err) => {
       console.error('Error loading 3D flow visualisation scene:', err);
     });
@@ -2243,7 +2152,6 @@ function displayCfdResults(job) {
 
   if (job && job.jobId) {
     fetchFlowVisualisation(job.jobId);
-    fetchStreamlinesVisualisation(job.jobId);
     fetchStreamlinesModel(job.jobId);
   }
   
@@ -2337,16 +2245,7 @@ function clearCfdRun() {
     activeFlowImageUrl = null;
   }
 
-  // Clear 3D streamlines visualisation state
-  const streamlinesImgEl = document.getElementById('streamlines-visualisation-img');
-  const streamlinesPlaceholderEl = document.getElementById('streamlines-visualisation-placeholder');
-  const streamlinesLoadingEl = document.getElementById('streamlines-visualisation-loading');
-  if (streamlinesImgEl && streamlinesPlaceholderEl && streamlinesLoadingEl) {
-    streamlinesImgEl.src = '';
-    streamlinesImgEl.style.display = 'none';
-    streamlinesLoadingEl.style.display = 'none';
-    streamlinesPlaceholderEl.style.display = 'flex';
-  }
+  // Clear 3D streamlines from the viewport
   clearStreamlineScene();
 
   const consoleEl = document.getElementById('cfd-console');
