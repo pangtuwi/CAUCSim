@@ -7,7 +7,7 @@ const path = require('path');
 const THREE = require('three');
 
 // Load main.js
-const mainJsSource = fs.readFileSync(path.resolve(__dirname, 'public/js/main.js'), 'utf8');
+const mainJsSource = fs.readFileSync(path.resolve(__dirname, 'frontend/cfd/js/main.js'), 'utf8');
 
 // We need to extract the calculateSurfaceArea function.
 const calculateSurfaceAreaSourceMatch = mainJsSource.match(/function calculateSurfaceArea\(geometry\) \{[\s\S]*?return area;\n\}/);

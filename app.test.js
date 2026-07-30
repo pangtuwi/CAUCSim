@@ -147,7 +147,7 @@ global.fetch = jest.fn().mockImplementation(async (url, options) => {
 });
 
 const request = require('supertest');
-const app = require('./app');
+const app = require('./backend/app/app');
 
 describe('CAUCSim API Tests (Strict Production Mode)', () => {
   const authHeaderValue = 'Bearer mock-session-token';

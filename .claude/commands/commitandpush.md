@@ -5,7 +5,7 @@ description: Bump version, refresh README and TODO, run tests, then commit and p
 Run through these steps in order. Stop and report back if any step fails — do not continue to the next step (and do not commit/push) on failure.
 
 1. **Bump the version by 0.01.**
-   - The version lives in the `version-badge` span in `public/index.html` (e.g. `v0.35`).
+   - The version lives in the `version-badge` span in `frontend/cfd/index.html` (e.g. `v0.35`).
    - Increment it by 0.01, keeping two decimal places (e.g. `v0.35` → `v0.36`).
 
 2. **Update the README.**

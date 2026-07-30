@@ -46,6 +46,31 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 
 ---
 
+## Repository Layout
+
+```
+CAUCSim/
+├── frontend/
+│   └── cfd/                 # CFD UI (index.html, style.css, js/main.js, icons)
+├── backend/
+│   └── app/app.js           # Express app + all API routes; the Lambda handler
+├── openfoam-template/       # OpenFOAM case template, zipped and uploaded to S3
+├── scripts/                 # Local tooling (template upload, droplet setup)
+├── Documentation/           # Architecture, AWS/auth setup, droplet build notes
+├── serverless.yaml          # Lambda + API Gateway definition
+└── *.test.js                # Jest suites for the API and the frontend geometry math
+```
+
+This layout is step 1 of the migration described in
+`Documentation/ARCHITECTURE-UPGRADE-SPEC.md`. The frontend and backend now live in
+separate trees so they can deploy independently later, but for the moment behaviour is
+unchanged: the single Lambda still serves `frontend/cfd/` as static assets alongside
+the API. `serverless.yaml` therefore stays at the repository root — it can only package
+files inside its own service directory — and moves into `backend/` in step 2, once
+CloudFront and S3 take over serving the UI.
+
+---
+
 ## Getting Started
 
 ### 1. Installation
@@ -81,7 +106,7 @@ Open [http://localhost:3000](http://localhost:3000) in your web browser.
 
 ## Production Security (AWS Lambda)
 When deploying the Express application as a serverless Lambda:
-- Do not pack your `.env` file containing credentials.
+- Do not pack your `.env` file containing credentials. This is now enforced by the `package.patterns` block in `serverless.yaml`, which also keeps the OpenFOAM case template, documentation, and test files out of the deployment bundle — the case template is fetched from S3 at runtime, not read from the Lambda package.
 - Assign an **IAM Execution Role** to the Lambda function containing read/write permissions for your S3 bucket. The AWS SDK will automatically assume this role to request S3 credentials securely.
 - Define `S3_BUCKET_NAME`, `AWS_REGION`, and the DigitalOcean configuration keys (`DIGITALOCEAN_TOKEN`, `DIGITALOCEAN_PROJECT_ID`, etc.) as **GitHub Secrets** when deploying via GitHub Actions, or configure them directly in the AWS Lambda Environment Variables console. These are mapped in `serverless.yaml` and `.github/workflows/deploy.yml` to automate their injection during deployment.
 - **`DIGITALOCEAN_SNAPSHOT_NAME` is required and has no default.** Job creation returns an error if neither it nor `DIGITALOCEAN_IMAGE_ID` is set, rather than falling back to a hard-coded snapshot name. Keep this value in step with the snapshot you actually want booted — pointing it at an image that predates the ParaView install produces jobs that complete normally but silently omit the 3D streamlines artifacts, since that step is skipped gracefully when `pvpython`/`xvfb-run` are missing.

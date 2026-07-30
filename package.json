@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "start": "node app.js",
-    "dev": "node --watch app.js",
+    "start": "node backend/app/app.js",
+    "dev": "node --watch backend/app/app.js",
     "test": "jest",
     "upload-template": "node scripts/upload-template.js"
   },

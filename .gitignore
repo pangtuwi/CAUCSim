@@ -2,6 +2,9 @@
 node_modules/
 uploads/
 
+# Serverless Framework build output
+.serverless/
+
 # Local configuration
 .env
 .env.local

@@ -1,6 +1,7 @@
 // Conditionally load dotenv for local development (skipped in production/Lambda)
+// .env lives at the repo root, two levels above this file
 if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config();
+  require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 }
 
 const express = require('express');
@@ -28,7 +29,7 @@ app.use('/api', (req, res, next) => {
 const isLambda = !!process.env.LAMBDA_TASK_ROOT;
 
 // Serve frontend static assets with cache-busting headers
-app.use(express.static('public', {
+app.use(express.static(path.join(__dirname, '../../frontend/cfd'), {
   etag: true,
   lastModified: true,
   setHeaders: (res, path) => {

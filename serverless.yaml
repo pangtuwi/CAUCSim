@@ -21,6 +21,24 @@ provider:
     DIGITALOCEAN_SIZE: ${env:DIGITALOCEAN_SIZE, 'gd-16vcpu-64gb'}
     APP_CALLBACK_URL: ${env:APP_CALLBACK_URL, ''}
 
+# Keep the Lambda zip to just the app code and the static frontend it still serves.
+# (The OpenFOAM case template is fetched from S3 at runtime, not read from the bundle.)
+package:
+  patterns:
+    - '!.env*'          # credentials come from Lambda env vars, never the bundle
+    - '!Archive.zip'
+    - '!Documentation/**'
+    - '!Specifications/**'
+    - '!openfoam-template/**'
+    - '!openfoam-template_F24Steady/**'
+    - '!scratch/**'
+    - '!scripts/**'
+    - '!uploads/**'
+    - '!.github/**'
+    - '!.claude/**'
+    - '!.vscode/**'
+    - '!**/*.test.js'
+
 functions:
   api:
-    handler: app.handler
+    handler: backend/app/app.handler

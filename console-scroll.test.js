@@ -30,7 +30,7 @@ describe('Execution Log UI Auto-Scroll and Layout', () => {
 
   beforeEach(() => {
     // 1. Load HTML structure from index.html
-    const html = fs.readFileSync(path.resolve(__dirname, 'public/index.html'), 'utf8');
+    const html = fs.readFileSync(path.resolve(__dirname, 'frontend/cfd/index.html'), 'utf8');
     document.documentElement.innerHTML = html;
 
     consoleEl = document.getElementById('cfd-console');
@@ -82,7 +82,7 @@ describe('Execution Log UI Auto-Scroll and Layout', () => {
 
   it('showCfdMonitor reveals the monitor as a flex column, not a block', () => {
     // Extracted from main.js so the real implementation is under test.
-    const src = fs.readFileSync(path.resolve(__dirname, 'public/js/main.js'), 'utf8');
+    const src = fs.readFileSync(path.resolve(__dirname, 'frontend/cfd/js/main.js'), 'utf8');
     const match = src.match(/function showCfdMonitor\(show\) \{[\s\S]*?\n\}/);
     expect(match).toBeTruthy();
 

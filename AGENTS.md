@@ -31,3 +31,10 @@ Paul Williams, July 2026
 - **Jest/Supertest:** Local API tests are stored in `app.test.js`.
 - **Test Suite Mocking:** The test suite programmatically overrides environment variables and mocks `@aws-sdk/client-s3` and `aws-jwt-verify` using Jest to test backend API endpoints without communicating with real AWS services.
 - **Execution:** Run tests using `npm test`. Ensure all tests pass before making pull requests.
+
+---
+
+## 5. Local Development & Browser Testing
+- **Browser:** Do local testing in **Chrome on `http://localhost:3000`**, not in an embedded/headless browser. The app sits behind AWS Cognito and the logged-in session lives in the user's own Chrome profile.
+- **Authentication:** The **user signs in** — ask them to authenticate when a check requires a logged-in session, and never enter credentials into the login form on their behalf.
+- **Dev server:** `npm run dev` (watch mode, port 3000), or the `caucsim-dev` configuration in `.claude/launch.json`.
