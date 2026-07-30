@@ -1025,6 +1025,85 @@ body {
   color: var(--text-primary) !important;
 }
 
+/* Execution Log Viewer Overlay (Stage 4 "View Log") */
+/* Wider and taller than .auth-modal-content: log lines are long and monospaced,
+   so this trades the sign-in modal's narrow centred card for a reading pane. */
+.log-modal-content {
+  background: linear-gradient(135deg, rgba(16, 22, 35, 0.85), rgba(8, 12, 21, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  width: 90%;
+  max-width: 1000px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.log-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.log-modal-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+.log-modal-header p {
+  margin: 3px 0 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+#btn-close-log {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+#btn-close-log:hover {
+  background: rgba(255, 61, 0, 0.08);
+  border-color: rgba(255, 61, 0, 0.2);
+  color: var(--danger-color);
+}
+
+#log-modal-console {
+  flex: 1;
+  min-height: 0;
+  background: #020408;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 12px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: #a5b4fc;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 #btn-logout:hover {
   background: rgba(255, 61, 0, 0.08) !important;
   border-color: rgba(255, 61, 0, 0.2) !important;
@@ -1214,16 +1293,7 @@ body {
   }
 }
 
-/* Center Column Graphical Results Styling */
-.graphical-results-container {
-  background: var(--bg-secondary);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-sizing: border-box;
-  animation: viewportFadeIn 0.4s ease;
-}
-
+/* Aerodynamic Summary Chart Sub-panels (Right Column) */
 .chart-svg-wrapper {
   width: 100%;
   height: 100%;
