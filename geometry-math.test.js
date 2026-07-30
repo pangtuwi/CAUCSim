@@ -21,6 +21,16 @@ eval(`
   calculateSurfaceArea = ${calculateSurfaceAreaSource}
 `);
 
+const calculateFrontalAreaSourceMatch = mainJsSource.match(/function calculateFrontalArea\(geometry, size\) \{[\s\S]*?return frontalAreaMm2 \/ 1000000; \/\/ mm² -> m²\n\}/);
+if (!calculateFrontalAreaSourceMatch) {
+  console.error("Could not find calculateFrontalArea function in main.js");
+  process.exit(1);
+}
+let calculateFrontalArea;
+eval(`
+  calculateFrontalArea = ${calculateFrontalAreaSourceMatch[0]}
+`);
+
 describe('Geometry Math Functions - calculateSurfaceArea', () => {
   it('calculates the surface area of a 1x1x1 box correctly (indexed)', () => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -57,5 +67,63 @@ describe('Geometry Math Functions - calculateSurfaceArea', () => {
   it('throws an error if geometry has no position attribute', () => {
     const geometry = new THREE.BufferGeometry();
     expect(() => calculateSurfaceArea(geometry)).toThrow();
+  });
+});
+
+describe('Geometry Math Functions - calculateFrontalArea', () => {
+  it('calculates the frontal area of a 10x100x100 box correctly', () => {
+    // A box with width(Y)=100, height(Z)=100 has a frontal area on YZ plane of 10000 mm^2 = 0.01 m^2
+    const geometry = new THREE.BoxGeometry(10, 100, 100);
+    geometry.computeBoundingBox();
+    const size = new THREE.Vector3();
+    geometry.boundingBox.getSize(size);
+    const area = calculateFrontalArea(geometry, size);
+    expect(area).toBeCloseTo(0.01, 3);
+  });
+
+  it('calculates the frontal area of a non-indexed box correctly', () => {
+    const geometry = new THREE.BoxGeometry(10, 100, 100).toNonIndexed();
+    geometry.computeBoundingBox();
+    const size = new THREE.Vector3();
+    geometry.boundingBox.getSize(size);
+    const area = calculateFrontalArea(geometry, size);
+    expect(area).toBeCloseTo(0.01, 3);
+  });
+
+  it('calculates the frontal area of a flat plane correctly', () => {
+    const geometry = new THREE.PlaneGeometry(100, 100);
+    geometry.rotateX(Math.PI / 2); // Now in XZ plane
+    geometry.rotateZ(Math.PI / 2); // Now in YZ plane
+    geometry.computeBoundingBox();
+    const size = new THREE.Vector3();
+    geometry.boundingBox.getSize(size);
+    const area = calculateFrontalArea(geometry, size);
+    expect(area).toBeCloseTo(0.01, 3);
+  });
+
+  it('returns 0 for geometry with width or height <= 0', () => {
+    const geometry = new THREE.BoxGeometry(10, 10, 10);
+    expect(calculateFrontalArea(geometry, new THREE.Vector3(10, 0, 10))).toBe(0);
+    expect(calculateFrontalArea(geometry, new THREE.Vector3(10, 10, 0))).toBe(0);
+  });
+
+  it('handles low vs high face count geometries (dynamic grid resolution)', () => {
+    const size = new THREE.Vector3(100, 100, 100);
+
+    // Low face count
+    const geomLow = new THREE.BoxGeometry(100, 100, 100);
+    geomLow.computeBoundingBox();
+    const areaLow = calculateFrontalArea(geomLow, size);
+    expect(areaLow).toBeGreaterThan(0.009); // should be close to 0.01
+
+    // High face count > 150000
+    // SphereGeometry(radius, widthSegments, heightSegments)
+    // 400 * 400 * 2 = 320,000 faces
+    const geomHigh = new THREE.SphereGeometry(50, 400, 400);
+    geomHigh.computeBoundingBox();
+    geomHigh.boundingBox.getSize(size);
+    const areaHigh = calculateFrontalArea(geomHigh, size);
+    // Area of sphere projected is a circle of radius 50 = pi * 50^2 = 7853.98 mm^2 = 0.00785 m^2
+    expect(areaHigh).toBeCloseTo(0.00785, 2);
   });
 });
