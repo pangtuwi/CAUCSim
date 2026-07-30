@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.42</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.43</span></p>
         </div>
       </div>
       
@@ -178,6 +178,12 @@
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                 </svg>
                 Download ZIP
+              </a>
+              <a href="#" id="lnk-view-log" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 5h16M4 10h16M4 15h10M4 20h7"/>
+                </svg>
+                View Log
               </a>
               <button class="btn-secondary" id="btn-clear-cfd" style="width: 100%; justify-content: center; display: flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Clear Run</button>
             </div>
@@ -565,6 +571,24 @@
         
         <button type="submit" class="btn-primary" id="btn-login-submit" style="width: 100%; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: var(--accent-cyan); color: #020408; border: none; box-shadow: 0 0 12px var(--accent-cyan-glow);">Sign In</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Execution Log Viewer Overlay (Stage 4 "View Log") -->
+  <div id="log-modal" class="auth-overlay" style="display: none;">
+    <div class="log-modal-content">
+      <div class="log-modal-header">
+        <div>
+          <h2>Execution Log</h2>
+          <p id="log-modal-subtitle">Full OpenFOAM solver output for the completed run</p>
+        </div>
+        <button class="btn-icon" id="btn-close-log" title="Close log viewer" aria-label="Close log viewer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path stroke-linecap="round" d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="terminal-console" id="log-modal-console"></div>
     </div>
   </div>
 

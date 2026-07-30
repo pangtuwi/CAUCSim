@@ -1928,6 +1928,54 @@ async function fetchCfdLogs() {
   }
 }
 
+// --- Stage 4 Execution Log Viewer ---
+// Stage 3's live console scrolls away once a run completes and the user moves to
+// Stage 4, so this re-fetches the finished log into a full-height overlay.
+function closeLogModal() {
+  const modal = document.getElementById('log-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function openLogModal() {
+  const modal = document.getElementById('log-modal');
+  const consoleEl = document.getElementById('log-modal-console');
+  if (!modal || !consoleEl) return;
+
+  modal.style.display = 'flex';
+
+  if (!activeJobId) {
+    consoleEl.textContent = 'No simulation run is currently loaded.';
+    return;
+  }
+
+  consoleEl.textContent = 'Fetching execution log...';
+
+  try {
+    const res = await fetch(`/api/jobs/${activeJobId}/log`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || ''}`
+      }
+    });
+
+    if (res.status === 401) {
+      closeLogModal();
+      handleLogout();
+      return;
+    }
+    if (!res.ok) {
+      consoleEl.textContent = `Could not retrieve the execution log (status ${res.status}).`;
+      return;
+    }
+
+    const logText = await res.text();
+    consoleEl.textContent = logText.trim() ? logText : 'The execution log is empty for this run.';
+    consoleEl.scrollTop = 0; // Start at the top: this is a completed log to read, not a live tail
+  } catch (err) {
+    console.error("Error fetching execution log:", err);
+    consoleEl.textContent = 'Failed to fetch the execution log. Check your connection and try again.';
+  }
+}
+
 function updateEngineStatus(job) {
   const engineStatus = document.getElementById('engine-status');
   const engineStatusVal = document.getElementById('engine-status-val');
@@ -2248,6 +2296,9 @@ function clearCfdRun() {
   // Clear 3D streamlines from the viewport
   clearStreamlineScene();
 
+  // The log belongs to the run being cleared, so don't leave it on screen
+  closeLogModal();
+
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
     consoleEl.textContent = '';
@@ -2303,6 +2354,30 @@ function initCfdRunner() {
   const btnToggleConsole = document.getElementById('btn-toggle-console');
   const btnClearCfd = document.getElementById('btn-clear-cfd');
   const downloadLnk = document.getElementById('lnk-download-results');
+  const viewLogLnk = document.getElementById('lnk-view-log');
+
+  if (viewLogLnk) {
+    viewLogLnk.addEventListener('click', (e) => {
+      e.preventDefault();
+      openLogModal();
+    });
+  }
+
+  const btnCloseLog = document.getElementById('btn-close-log');
+  if (btnCloseLog) {
+    btnCloseLog.addEventListener('click', closeLogModal);
+  }
+
+  // Dismiss on backdrop click and Escape, matching typical overlay behaviour
+  const logModal = document.getElementById('log-modal');
+  if (logModal) {
+    logModal.addEventListener('click', (e) => {
+      if (e.target === logModal) closeLogModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLogModal();
+  });
   
   if (btnRunCfd) {
     btnRunCfd.addEventListener('click', startCfdSimulation);
