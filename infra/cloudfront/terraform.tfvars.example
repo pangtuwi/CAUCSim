@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored.
+
+region = "eu-west-2"
+
+# Leave unset to auto-derive caucsim-frontend-<account-id>-eu-west-2.
+# frontend_bucket_name = "caucsim-frontend-247638741223-eu-west-2"
+
+# Migration step 2: static only. Flip to true for step 3 once the UI renders
+# from the CloudFront test domain.
+enable_api_behavior = false
+
+# Confirm with: aws apigateway get-rest-apis --region eu-west-2 --query 'items[].name'
+api_gateway_name  = "prod-caucsim-backend"
+api_gateway_stage = "prod"
+
+price_class = "PriceClass_100"
+
+# Migration step 4 only. The certificate must be issued in us-east-1.
+# domain_names        = ["caucsim.example.org"]
+# acm_certificate_arn = "arn:aws:acm:us-east-1:247638741223:certificate/xxxxxxxx"

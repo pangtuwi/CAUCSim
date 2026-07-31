@@ -54,6 +54,8 @@ CAUCSim/
 │   └── cfd/                 # CFD UI (index.html, style.css, js/main.js, icons)
 ├── backend/
 │   └── app/app.js           # Express app + all API routes; the Lambda handler
+├── infra/
+│   └── cloudfront/          # Terraform: S3 origin bucket + CloudFront distribution
 ├── openfoam-template/       # OpenFOAM case template, zipped and uploaded to S3
 ├── scripts/                 # Local tooling (template upload, droplet setup)
 ├── Documentation/           # Architecture, AWS/auth setup, droplet build notes
@@ -68,6 +70,11 @@ unchanged: the single Lambda still serves `frontend/cfd/` as static assets along
 the API. `serverless.yaml` therefore stays at the repository root — it can only package
 files inside its own service directory — and moves into `backend/` in step 2, once
 CloudFront and S3 take over serving the UI.
+
+`infra/cloudfront/` holds the Terraform for that next step. It is written and
+validated but **not yet applied** — no CloudFront distribution exists, and the Lambda
+remains the only thing serving the app. See
+[CLOUDFRONT-SETUP.md](Documentation/CLOUDFRONT-SETUP.md) for the phased runbook.
 
 ---
 
@@ -121,3 +128,5 @@ For detailed technical specifications and setup guides, refer to:
 *   [AWSCONFIG.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AWSCONFIG.md) - Reference record of production AWS resource naming and permission schemas.
 *   [TEMPLATE_UPLOAD.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/TEMPLATE_UPLOAD.md) - Step-by-step instructions for modifying and uploading updated OpenFOAM case templates to S3.
 *   [SETUP_DROPLET.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/SETUP_DROPLET.md) - How to build and update the pre-baked DigitalOcean snapshot (OpenFOAM + headless ParaView) that CFD droplets boot from.
+*   [DEV-MACHINE-SETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/DEV-MACHINE-SETUP.md) - Getting a new Mac from nothing to running, deploying and applying infrastructure: Homebrew, nvm/Node, AWS CLI, Terraform, and the `.env` value sources.
+*   [CLOUDFRONT-SETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/CLOUDFRONT-SETUP.md) - Runbook for standing up S3 + CloudFront, adding the `/api/*` passthrough, and cutting DNS over (migration spec steps 2-4).

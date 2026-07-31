@@ -5,6 +5,14 @@ uploads/
 # Serverless Framework build output
 .serverless/
 
+# Terraform state, plans and local variable files
+# (.terraform.lock.hcl is deliberately NOT ignored — commit it to pin provider versions)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+
 # Local configuration
 .env
 .env.local
