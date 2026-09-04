@@ -32,7 +32,9 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 ### 4. Authentication via AWS Cognito
 - **Secure Sign In:** Protects sensitive CAD files and simulation endpoints. The frontend communicates directly with AWS Cognito User Pools (via HTTP fetch) to exchange credentials for ID tokens.
 - **JWT Validation Middleware:** The Express server validates RS256 JWT signatures on all data requests using `aws-jwt-verify`.
+- **Self-Service Password Reset:** A **Forgot password?** link on the sign-in panel runs Cognito's `ForgotPassword` / `ConfirmForgotPassword` flow — the user receives a six-digit code by email and sets a new password without an administrator. First-time users invited by an administrator instead complete the `NEW_PASSWORD_REQUIRED` challenge in the same panel.
 - **Setup Instructions:** Refer to [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) for step-by-step AWS Cognito User Pool creation.
+- **Adding & Managing Users:** Refer to [USER_MANAGEMENT.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/USER_MANAGEMENT.md) for inviting users, resetting passwords, and revoking access.
 
 ### 5. Elastic Cloud HPC Compute (DigitalOcean)
 - **Scale-to-Zero HPC Droplets:** Launches high-performance dedicated compute droplets (`gd-16vcpu-64gb`) on-demand from a pre-configured OpenFOAM image snapshot using the DigitalOcean API.
@@ -126,6 +128,7 @@ For detailed technical specifications and setup guides, refer to:
 *   [ARCHITECTURE.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/ARCHITECTURE.md) - Overview of the system topography, decoupled architecture, and client-side data flows.
 *   [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) - Detailed step-by-step instructions for establishing AWS Cognito User Pools.
 *   [AWSCONFIG.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AWSCONFIG.md) - Reference record of production AWS resource naming and permission schemas.
+*   [USER_MANAGEMENT.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/USER_MANAGEMENT.md) - Day-to-day runbook for inviting new users to the Cognito pool, resetting passwords, and removing access.
 *   [TEMPLATE_UPLOAD.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/TEMPLATE_UPLOAD.md) - Step-by-step instructions for modifying and uploading updated OpenFOAM case templates to S3.
 *   [SETUP_DROPLET.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/SETUP_DROPLET.md) - How to build and update the pre-baked DigitalOcean snapshot (OpenFOAM + headless ParaView) that CFD droplets boot from.
 *   [DEV-MACHINE-SETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/DEV-MACHINE-SETUP.md) - Getting a new Mac from nothing to running, deploying and applying infrastructure: Homebrew, nvm/Node, AWS CLI, Terraform, and the `.env` value sources.

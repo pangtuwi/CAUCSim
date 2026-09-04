@@ -86,3 +86,11 @@ COGNITO_USER_POOL_ID=eu-west-2_aBcDeFg12
 COGNITO_CLIENT_ID=3n4b5v6c7x8z9q1w2e3r4t5y6u
 AWS_REGION=eu-west-2
 ```
+
+---
+
+## Next: adding users
+
+This guide covers creating the User Pool itself. For the recurring task of
+inviting individual people, resetting passwords, and revoking access, see
+[USER_MANAGEMENT.md](USER_MANAGEMENT.md).

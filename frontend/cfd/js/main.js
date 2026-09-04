@@ -34,6 +34,11 @@ let authMode = 'cognito'; // 'cognito'
 let cognitoConfig = null;
 let authSession = null;
 let challengeEmail = null;
+// Which face the shared auth form is currently showing. One of 'signin',
+// 'newPassword' (Cognito's NEW_PASSWORD_REQUIRED challenge), 'forgotRequest'
+// or 'forgotConfirm'.
+let authFormMode = 'signin';
+let resetEmail = null;
 
 
 
@@ -59,6 +64,13 @@ const authEmail = document.getElementById('auth-email');
 const authPassword = document.getElementById('auth-password');
 const authError = document.getElementById('auth-error');
 const btnLoginSubmit = document.getElementById('btn-login-submit');
+const authNotice = document.getElementById('auth-notice');
+const authNewPassword = document.getElementById('auth-new-password');
+const authResetCode = document.getElementById('auth-reset-code');
+const authResetPassword = document.getElementById('auth-reset-password');
+const authForgotLink = document.getElementById('auth-forgot-link');
+const authBackLink = document.getElementById('auth-back-link');
+const authResendCodeLink = document.getElementById('auth-resend-code-link');
 const btnLogout = document.getElementById('btn-logout');
 
 // Stats Elements
@@ -1515,151 +1527,306 @@ function handleLogout() {
   libraryEmpty.style.display = 'block';
 
   // Reset auth form state and re-enable HTML validation on default inputs
-  authSession = null;
-  challengeEmail = null;
-  const challengeFields = document.getElementById('challenge-fields');
-  if (challengeFields) challengeFields.style.display = 'none';
-  if (authEmail) {
-    authEmail.closest('.form-group').style.display = 'flex';
-    authEmail.required = true;
-  }
-  if (authPassword) {
-    authPassword.closest('.form-group').style.display = 'flex';
-    authPassword.required = true;
-  }
-  const newPasswordInput = document.getElementById('auth-new-password');
-  if (newPasswordInput) {
-    newPasswordInput.value = '';
-    newPasswordInput.required = false;
-  }
-  if (btnLoginSubmit) {
-    btnLoginSubmit.disabled = false;
-    btnLoginSubmit.textContent = 'Sign In';
-  }
+  resetAuthForm();
 
   validateSession();
+}
+
+// The shared auth form has four faces; this is the submit label for each.
+const AUTH_SUBMIT_LABELS = {
+  signin: 'Sign In',
+  newPassword: 'Confirm New Password',
+  forgotRequest: 'Send Reset Code',
+  forgotConfirm: 'Reset Password'
+};
+
+// Checked before we bother Cognito with an obviously short password. The pool's
+// real policy is stricter and enforced server-side; its rejection text is shown
+// verbatim because it spells out the actual requirements.
+const MIN_PASSWORD_LENGTH = 8;
+
+// Switch the auth form between sign-in, the first-run NEW_PASSWORD_REQUIRED
+// challenge, and the two steps of the forgot-password flow.
+function setAuthFormMode(mode) {
+  authFormMode = mode;
+
+  const isSignIn = mode === 'signin';
+  const isNewPassword = mode === 'newPassword';
+  const isForgotRequest = mode === 'forgotRequest';
+  const isForgotConfirm = mode === 'forgotConfirm';
+
+  const show = (el, visible, display) => {
+    if (el) el.style.display = visible ? (display || 'flex') : 'none';
+  };
+
+  show(authEmail.closest('.form-group'), isSignIn || isForgotRequest);
+  show(authPassword.closest('.form-group'), isSignIn);
+  show(document.getElementById('reset-request-hint'), isForgotRequest);
+  show(document.getElementById('reset-fields'), isForgotConfirm);
+  show(document.getElementById('challenge-fields'), isNewPassword);
+  show(document.getElementById('auth-forgot-row'), isSignIn, 'block');
+  show(document.getElementById('auth-back-row'), isForgotRequest || isForgotConfirm, 'block');
+
+  // Keep HTML validation in step with what is actually on screen: a hidden
+  // input that is still `required` blocks submit with a bubble nobody can see.
+  authEmail.required = isSignIn || isForgotRequest;
+  authPassword.required = isSignIn;
+  if (authNewPassword) authNewPassword.required = isNewPassword;
+  if (authResetCode) authResetCode.required = isForgotConfirm;
+  if (authResetPassword) authResetPassword.required = isForgotConfirm;
+
+  btnLoginSubmit.disabled = false;
+  btnLoginSubmit.textContent = AUTH_SUBMIT_LABELS[mode];
+}
+
+// Return the form to a clean sign-in state. Leaves the email field alone so a
+// user who has just reset their password doesn't have to retype it.
+function resetAuthForm() {
+  authSession = null;
+  challengeEmail = null;
+  resetEmail = null;
+  authPassword.value = '';
+  if (authNewPassword) authNewPassword.value = '';
+  if (authResetCode) authResetCode.value = '';
+  if (authResetPassword) authResetPassword.value = '';
+  clearAuthMessages();
+  setAuthFormMode('signin');
+}
+
+function clearAuthMessages() {
+  authError.style.display = 'none';
+  if (authNotice) authNotice.style.display = 'none';
+}
+
+function showAuthNotice(msg) {
+  if (!authNotice) return;
+  authNotice.textContent = msg;
+  authNotice.style.display = 'block';
+}
+
+// Cognito's user pool endpoint speaks AWS JSON 1.1: the operation name goes in
+// X-Amz-Target, and failures come back as HTTP 400 with a `__type` of the form
+// "com.amazon...#CodeMismatchException". These are the unauthenticated
+// operations, so no request signing is involved and the browser can call them
+// directly with only the public app client ID.
+async function cognitoRequest(operation, body, fallbackMessage) {
+  const response = await fetch(`https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-amz-json-1.1',
+      'X-Amz-Target': `AWSCognitoIdentityProviderService.${operation}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = new Error(data.message || fallbackMessage);
+    err.code = String(data.__type || '').split('#').pop();
+    throw err;
+  }
+  return data;
+}
+
+// Turn a Cognito reset error into something the user can act on. `stage` is
+// 'request' or 'confirm' because InvalidParameterException means different
+// things either side of the code being sent.
+function resetErrorMessage(err, stage) {
+  switch (err.code) {
+    case 'NotAuthorizedException':
+      return 'This account cannot reset its password this way. If you have never signed in, use the temporary password from your invitation email instead. Otherwise contact an administrator.';
+    case 'InvalidParameterException':
+      return stage === 'request'
+        ? 'This account has no verified email address, so a reset code cannot be sent. Contact an administrator.'
+        : (err.message || 'Password reset failed.');
+    case 'CodeMismatchException':
+      return 'That code is not correct. Check the email and try again.';
+    case 'ExpiredCodeException':
+      return 'That code has expired. Choose "Send a new code" to get another.';
+    case 'PasswordHistoryPolicyViolationException':
+      return 'Choose a password you have not used before.';
+    case 'CodeDeliveryFailureException':
+      return 'The reset code could not be delivered. Contact an administrator.';
+    case 'LimitExceededException':
+    case 'TooManyRequestsException':
+    case 'TooManyFailedAttemptsException':
+      return 'Too many attempts. Wait a few minutes and try again.';
+    default:
+      return err.message || 'Password reset failed.';
+  }
+}
+
+// Ask Cognito to email a reset code. Resolves to the masked destination it
+// reports (e.g. "a***@e***"), or null when we can't say.
+async function requestPasswordReset(email) {
+  try {
+    const data = await cognitoRequest('ForgotPassword', {
+      ClientId: cognitoConfig.clientId,
+      Username: email
+    }, 'Could not start the password reset.');
+
+    resetEmail = email;
+    return (data.CodeDeliveryDetails && data.CodeDeliveryDetails.Destination) || null;
+  } catch (err) {
+    // Never confirm or deny that an account exists: an unknown address gets the
+    // same "code sent" screen as a real one. Cognito's own "prevent user
+    // existence errors" option does this server-side, but it is a per-app-client
+    // setting that can be switched off, so don't depend on it here.
+    if (err.code === 'UserNotFoundException') {
+      resetEmail = email;
+      return null;
+    }
+    throw err;
+  }
 }
 
 // Bind Auth UI event listeners
 authForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  authError.style.display = 'none';
+  clearAuthMessages();
   btnLoginSubmit.disabled = true;
-  
-  if (authSession) {
+
+  if (authFormMode === 'newPassword') {
     // Challenge response flow (Confirm new password)
     btnLoginSubmit.textContent = 'Confirming...';
-    const newPasswordInput = document.getElementById('auth-new-password');
-    const newPassword = newPasswordInput.value;
-    if (!newPassword || newPassword.length < 8) {
-      showAuthError('Password must be at least 8 characters long.');
+    const newPassword = authNewPassword.value;
+    if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+      showAuthError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
       return;
     }
-    
+
     try {
-      const cognitoUrl = `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`;
-      const response = await fetch(cognitoUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-amz-json-1.1',
-          'X-Amz-Target': 'AWSCognitoIdentityProviderService.RespondToAuthChallenge'
+      const data = await cognitoRequest('RespondToAuthChallenge', {
+        ChallengeName: 'NEW_PASSWORD_REQUIRED',
+        ClientId: cognitoConfig.clientId,
+        ChallengeResponses: {
+          USERNAME: challengeEmail,
+          NEW_PASSWORD: newPassword
         },
-        body: JSON.stringify({
-          ChallengeName: 'NEW_PASSWORD_REQUIRED',
-          ClientId: cognitoConfig.clientId,
-          ChallengeResponses: {
-            USERNAME: challengeEmail,
-            NEW_PASSWORD: newPassword
-          },
-          Session: authSession
-        })
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Password change failed.');
-      }
-      
+        Session: authSession
+      }, 'Password change failed.');
+
       // Success! Cognito returns tokens under AuthenticationResult
-      const token = data.AuthenticationResult.IdToken;
-      
-      // Reset form visual structure back to normal login state
-      authSession = null;
-      challengeEmail = null;
-      document.getElementById('challenge-fields').style.display = 'none';
-      authEmail.closest('.form-group').style.display = 'flex';
-      authPassword.closest('.form-group').style.display = 'flex';
-      newPasswordInput.value = '';
-      
-      // Re-enable validation on standard fields
-      authEmail.required = true;
-      authPassword.required = true;
-      newPasswordInput.required = false;
-      
-      handleLoginSuccess(token);
+      handleLoginSuccess(data.AuthenticationResult.IdToken);
     } catch (err) {
       console.error("Password update error:", err);
       showAuthError(err.message || 'Failed to update password.');
     }
     return;
   }
-  
+
+  if (authFormMode === 'forgotRequest') {
+    btnLoginSubmit.textContent = 'Sending...';
+    const email = authEmail.value.trim();
+
+    try {
+      const destination = await requestPasswordReset(email);
+      setAuthFormMode('forgotConfirm');
+      document.getElementById('reset-destination-text').textContent = destination
+        ? `We sent a code to ${destination}. Enter it below with your new password.`
+        : 'If that account exists, a code is on its way. Enter it below with your new password.';
+      showAuthNotice('Reset codes expire after 24 hours.');
+      authResetCode.focus();
+    } catch (err) {
+      console.error("Password reset request error:", err);
+      showAuthError(resetErrorMessage(err, 'request'));
+    }
+    return;
+  }
+
+  if (authFormMode === 'forgotConfirm') {
+    const code = authResetCode.value.trim();
+    const newPassword = authResetPassword.value;
+    if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+      showAuthError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
+      return;
+    }
+
+    btnLoginSubmit.textContent = 'Resetting...';
+    try {
+      await cognitoRequest('ConfirmForgotPassword', {
+        ClientId: cognitoConfig.clientId,
+        Username: resetEmail,
+        ConfirmationCode: code,
+        Password: newPassword
+      }, 'Password reset failed.');
+
+      // Cognito issues no tokens here, so drop the user back on the sign-in
+      // form with their email still filled in.
+      const email = resetEmail;
+      resetAuthForm();
+      authEmail.value = email;
+      showAuthNotice('Password updated. Sign in with your new password.');
+      authPassword.focus();
+    } catch (err) {
+      console.error("Password reset confirmation error:", err);
+      showAuthError(resetErrorMessage(err, 'confirm'));
+    }
+    return;
+  }
+
   // Normal Login Flow
   btnLoginSubmit.textContent = 'Signing in...';
   const email = authEmail.value.trim();
   const password = authPassword.value;
-  
+
   // Production Cognito HTTP flow
   try {
-    const cognitoUrl = `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`;
-    const response = await fetch(cognitoUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-amz-json-1.1',
-        'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
-      },
-      body: JSON.stringify({
-        AuthFlow: 'USER_PASSWORD_AUTH',
-        ClientId: cognitoConfig.clientId,
-        AuthParameters: {
-          USERNAME: email,
-          PASSWORD: password
-        }
-      })
-    });
-    
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.message || 'Cognito authentication failed');
-    }
-    
+    const data = await cognitoRequest('InitiateAuth', {
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: cognitoConfig.clientId,
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: password
+      }
+    }, 'Cognito authentication failed');
+
     if (!data.AuthenticationResult) {
       if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
         // Transition form to password reset state
         authSession = data.Session;
         challengeEmail = email;
-        
-        authEmail.closest('.form-group').style.display = 'none';
-        authPassword.closest('.form-group').style.display = 'none';
-        document.getElementById('challenge-fields').style.display = 'flex';
-        btnLoginSubmit.textContent = 'Confirm New Password';
-        btnLoginSubmit.disabled = false;
         authPassword.value = '';
-        
-        // Disable validation on hidden fields and enable on new password field
-        authEmail.required = false;
-        authPassword.required = false;
-        document.getElementById('auth-new-password').required = true;
+        setAuthFormMode('newPassword');
         return;
       }
       throw new Error('Authentication challenge required but not supported.');
     }
-    
-    const token = data.AuthenticationResult.IdToken;
-    handleLoginSuccess(token);
+
+    handleLoginSuccess(data.AuthenticationResult.IdToken);
   } catch (err) {
     console.error("Cognito login error:", err);
     showAuthError(err.message || 'Login failed. Please check credentials.');
+  }
+});
+
+authForgotLink.addEventListener('click', () => {
+  clearAuthMessages();
+  authPassword.value = '';
+  setAuthFormMode('forgotRequest');
+  authEmail.focus();
+});
+
+authBackLink.addEventListener('click', () => {
+  resetAuthForm();
+  authEmail.focus();
+});
+
+authResendCodeLink.addEventListener('click', async () => {
+  if (!resetEmail) return;
+  clearAuthMessages();
+  authResendCodeLink.disabled = true;
+
+  try {
+    const destination = await requestPasswordReset(resetEmail);
+    showAuthNotice(destination
+      ? `New code sent to ${destination}.`
+      : 'If that account exists, a new code is on its way.');
+  } catch (err) {
+    console.error("Password reset resend error:", err);
+    showAuthError(resetErrorMessage(err, 'request'));
+  } finally {
+    authResendCodeLink.disabled = false;
   }
 });
 
@@ -1668,10 +1835,8 @@ btnLogout.addEventListener('click', handleLogout);
 function handleLoginSuccess(token) {
   idToken = token;
   localStorage.setItem('caucsim_id_token', token);
-  btnLoginSubmit.disabled = false;
-  btnLoginSubmit.textContent = 'Sign In';
+  resetAuthForm();
   authEmail.value = '';
-  authPassword.value = '';
   validateSession();
 }
 
@@ -1679,11 +1844,7 @@ function showAuthError(msg) {
   authError.textContent = msg;
   authError.style.display = 'block';
   btnLoginSubmit.disabled = false;
-  if (authSession) {
-    btnLoginSubmit.textContent = 'Confirm New Password';
-  } else {
-    btnLoginSubmit.textContent = 'Sign In';
-  }
+  btnLoginSubmit.textContent = AUTH_SUBMIT_LABELS[authFormMode] || AUTH_SUBMIT_LABELS.signin;
 }
 
 // --- CFD Simulation Runner Client Logic ---
