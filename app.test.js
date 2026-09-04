@@ -231,6 +231,13 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       expect(response.status).toBe(400);
     });
 
+    it('should return 400 if attempting to delete outside uploads directory', async () => {
+      const response = await request(app)
+        .delete('/api/files/results/job.json')
+        .set('Authorization', authHeaderValue);
+      expect(response.status).toBe(400);
+    });
+
     it('should delete the specified file from S3', async () => {
       mockInMemoryS3['uploads/12345_test-car.stl'] = Buffer.from('mock stl content');
 

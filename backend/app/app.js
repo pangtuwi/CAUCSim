@@ -194,14 +194,21 @@ app.delete('/api/files/*fileKey', requireAuth, async (req, res) => {
   if (Array.isArray(fileKey)) {
     fileKey = fileKey.join('/');
   }
+
   if (!fileKey || fileKey.includes('..')) {
+    return res.status(400).json({ error: 'Invalid file key' });
+  }
+
+  const normalizedFileKey = path.posix.normalize(fileKey);
+
+  if (!normalizedFileKey.startsWith('uploads/') || normalizedFileKey === 'uploads/') {
     return res.status(400).json({ error: 'Invalid file key' });
   }
 
   try {
     const deleteCommand = new DeleteObjectCommand({
       Bucket: bucketName,
-      Key: fileKey
+      Key: normalizedFileKey
     });
     await s3Client.send(deleteCommand);
     res.json({ message: 'S3 object deleted successfully' });
