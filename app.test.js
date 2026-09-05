@@ -287,6 +287,149 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       expect(stateFile).toHaveProperty('frontalArea', 0.16);
     });
 
+    // Creates a job and hands back the state that was persisted for it.
+    const createJobWithState = async (payload) => {
+      const response = await request(app)
+        .post('/api/jobs')
+        .set('Authorization', authHeaderValue)
+        .send({ fileKey: 'uploads/test-car.stl', ...payload });
+      expect(response.status).toBe(200);
+      return JSON.parse(mockInMemoryS3[`results/${response.body.jobId}/job.json`].toString());
+    };
+
+    describe('reference geometry parameters', () => {
+      it('stores a valid wheelbase and moment centre', async () => {
+        const state = await createJobWithState({ wheelbase: 1.42, momentCentreX: 0.75 });
+        expect(state).toHaveProperty('wheelbase', 1.42);
+        expect(state).toHaveProperty('momentCentreX', 0.75);
+      });
+
+      // Absent or nonsense values leave the template's own lRef/CofR standing
+      // rather than substituting something wrong.
+      it.each([
+        ['omitted', {}],
+        ['zero', { wheelbase: 0 }],
+        ['negative', { wheelbase: -1.42 }],
+        ['a string', { wheelbase: '1.42' }],
+        ['NaN', { wheelbase: Number.NaN }]
+      ])('records a null wheelbase when %s', async (_label, payload) => {
+        const state = await createJobWithState(payload);
+        expect(state.wheelbase).toBeNull();
+      });
+
+      // Unlike the wheelbase, zero is a legitimate moment centre.
+      it('accepts a moment centre of zero', async () => {
+        const state = await createJobWithState({ momentCentreX: 0 });
+        expect(state).toHaveProperty('momentCentreX', 0);
+      });
+    });
+
+    // The droplet writes job.json to S3 itself and only then curls the callback
+    // with "|| true". A callback that never lands (job started against a
+    // different APP_CALLBACK_URL, transient network failure) must not cost the
+    // user their results, so the coefficients are also derived on read.
+    describe('deriving coefficients when the callback never arrived', () => {
+      const FORCE_COEFFS = [
+        '# Force coefficients',
+        '# lRef        : 2.340000e+00',
+        '# Aref        : 6.571290e-01',
+        '# Time        \tCm            \tCd            \tCl            ',
+        '0             \t2.428109e-03\t1.875034e-02\t9.187129e-05',
+        '1             \t-7.291676e-02\t6.120765e-01\t-4.958101e-01',
+        '2             \t-1.313830e-01\t3.154900e-01\t-1.967192e-01'
+      ].join('\n') + '\n';
+
+      const seedCompletedJob = (jobId, extra = {}) => {
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId,
+          status: 'completed',
+          stage: 'completed',
+          updatedAt: new Date().toISOString(),
+          metrics: null,
+          raceSpeedMph: 30,
+          frontalArea: 0.657129,
+          ...extra
+        });
+      };
+
+      it('derives the metrics from forceCoeffs.dat on read', async () => {
+        const jobId = 'job-derive-on-read';
+        seedCompletedJob(jobId);
+        mockInMemoryS3[`results/${jobId}/forceCoeffs.dat`] = FORCE_COEFFS;
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.metrics).toBeTruthy();
+        expect(response.body.metrics.cd).toBeCloseTo(0.315402, 4);
+        expect(response.body.metrics.aref).toBeCloseTo(0.657129, 6);
+        // Three rows cannot demonstrate convergence.
+        expect(response.body.metrics.converged).toBe(false);
+        // The forces the results panel shows are derived too.
+        expect(response.body.metrics.dragForce).toBeGreaterThan(0);
+        expect(response.body.metrics.aeroPower).toBeGreaterThan(0);
+      });
+
+      it('records why instead of silently showing nothing when the history is missing', async () => {
+        const jobId = 'job-no-history';
+        seedCompletedJob(jobId);
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.metrics).toBeFalsy();
+        expect(typeof response.body.metricsError).toBe('string');
+        expect(response.body.metricsError.length).toBeGreaterThan(0);
+      });
+
+      it('does not re-derive for a job that already has metrics', async () => {
+        const jobId = 'job-already-has-metrics';
+        seedCompletedJob(jobId, { metrics: { cd: 0.999, cl: -0.111 } });
+        mockInMemoryS3[`results/${jobId}/forceCoeffs.dat`] = FORCE_COEFFS;
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.body.metrics.cd).toBe(0.999);
+      });
+
+      // A missing force history will not appear later, so don't re-read S3 on
+      // every poll of a finished job.
+      it('only attempts the derivation once', async () => {
+        const jobId = 'job-derive-once';
+        seedCompletedJob(jobId);
+
+        await request(app).get(`/api/jobs/${jobId}`).set('Authorization', authHeaderValue);
+        const persisted = JSON.parse(mockInMemoryS3[`results/${jobId}/job.json`].toString());
+        expect(persisted.metricsChecked).toBe(true);
+      });
+    });
+
+    describe('fast check mode', () => {
+      it('records an explicit fast check', async () => {
+        const state = await createJobWithState({ fastCheck: true });
+        expect(state).toHaveProperty('fastCheck', true);
+      });
+
+      // Strict boolean: no malformed request may quietly downgrade a run to the
+      // coarse mesh and have its output mistaken for a real result.
+      it.each([
+        ['omitted', {}],
+        ['false', { fastCheck: false }],
+        ['the string "true"', { fastCheck: 'true' }],
+        ['1', { fastCheck: 1 }],
+        ['null', { fastCheck: null }]
+      ])('defaults to full fidelity when fastCheck is %s', async (_label, payload) => {
+        const state = await createJobWithState(payload);
+        expect(state).toHaveProperty('fastCheck', false);
+      });
+    });
+
     it('should list jobs from S3', async () => {
       const response = await request(app)
         .get('/api/jobs')

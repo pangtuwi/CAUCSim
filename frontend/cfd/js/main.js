@@ -17,6 +17,10 @@ let activeFilename = null;
 let activeUrl = null;
 let activeFileKey = null;
 let currentFrontalArea = 0;
+// Wheelbase (m) normalises Cm, and the moment centre is the point Cm is
+// taken about. Both are pre-filled from the model and sent with the job.
+let currentWheelbase = 0;
+let currentMomentCentreX = 0;
 let activeStage = 1;
 let unlockedStages = new Set([1]);
 
@@ -72,6 +76,8 @@ const authForgotLink = document.getElementById('auth-forgot-link');
 const authBackLink = document.getElementById('auth-back-link');
 const authResendCodeLink = document.getElementById('auth-resend-code-link');
 const btnLogout = document.getElementById('btn-logout');
+const wheelbaseInput = document.getElementById('wheelbase-input');
+const fastCheckInput = document.getElementById('fast-check-input');
 
 // Stats Elements
 const statTriangles = document.getElementById('stat-triangles');
@@ -386,6 +392,16 @@ window.addEventListener('resize', () => {
 });
 
 // Helper function to reset active model states
+// The wheelbase field is pre-filled from the bounding box but is the user's
+// to correct, so read it at submit time. A blank or invalid entry falls back to
+// the model-derived value rather than blocking the run.
+function readWheelbase() {
+  if (!wheelbaseInput) return currentWheelbase;
+  const parsed = parseFloat(wheelbaseInput.value);
+  if (!isFinite(parsed) || parsed <= 0) return currentWheelbase;
+  return parsed;
+}
+
 function resetActiveGeometry() {
   clearActiveGeometry();
   
@@ -409,6 +425,10 @@ function resetActiveGeometry() {
   statSurfaceArea.textContent = '-';
   statFrontalArea.textContent = '-';
   currentFrontalArea = 0;
+  currentWheelbase = 0;
+  currentMomentCentreX = 0;
+  if (wheelbaseInput) wheelbaseInput.value = '';
+  if (fastCheckInput) fastCheckInput.checked = false;
   dimLen.textContent = '-';
   dimWid.textContent = '-';
   dimHei.textContent = '-';
@@ -847,6 +867,14 @@ function computeStats(geometry, size) {
   const frontalAreaM2 = calculateFrontalArea(geometry, size);
   statFrontalArea.textContent = frontalAreaM2.toFixed(4);
   currentFrontalArea = frontalAreaM2;
+
+  // Reference length and moment centre for the force coefficients. World units
+  // are mm (loadSTL normalises to mm), and the OpenFOAM case is in metres.
+  // Bounding-box length overestimates the true wheelbase by the nose and tail
+  // overhangs, so it is only a starting point the user can correct.
+  currentWheelbase = l / 1000;
+  currentMomentCentreX = (geometry.boundingBox.min.x + l / 2) / 1000;
+  if (wheelbaseInput) wheelbaseInput.value = currentWheelbase.toFixed(2);
 
   // Watertight status
   const isWatertight = volumeCm3 > 0.01; // basic validation
@@ -1929,7 +1957,10 @@ async function startCfdSimulation() {
       body: JSON.stringify({
         fileKey: activeFileKey,
         frontalArea: currentFrontalArea,
-        raceSpeedMph: raceSpeedMph
+        raceSpeedMph: raceSpeedMph,
+        wheelbase: readWheelbase(),
+        momentCentreX: currentMomentCentreX,
+        fastCheck: fastCheckInput ? fastCheckInput.checked : false
       })
     });
     
@@ -2354,6 +2385,50 @@ function showResultsSummary(hasResults) {
   if (loadedEl) loadedEl.style.display = hasResults ? 'block' : 'none';
 }
 
+// Render a coefficient as "0.267 ± 0.003" when the run reported a spread,
+// falling back to a bare value for jobs from before spreads were recorded.
+function formatCoefficient(value, std) {
+  if (typeof std !== 'number' || !isFinite(std)) return value.toFixed(3);
+  return `${value.toFixed(3)} ± ${std.toFixed(3)}`;
+}
+
+// Say plainly how much the numbers above can be trusted. A fast check and an
+// unconverged solve are different problems, and a fast check is always both.
+function renderResultBanner(m) {
+  const banner = document.getElementById('cfd-result-banner');
+  if (!banner) return;
+
+  let tone = null;
+  let text = '';
+
+  if (m.metricsError) {
+    tone = 'warn';
+    text = `<strong>No results available.</strong> ${m.metricsError}`;
+  } else if (m.fastCheck) {
+    tone = 'warn';
+    text = '<strong>Fast check run.</strong> Coarse mesh and a short solve — useful to confirm the model runs, but these numbers are not accurate. Re-run with Fast check unticked for a result you can use.';
+  } else if (m.converged === false) {
+    tone = 'warn';
+    text = '<strong>Not converged.</strong> The solution was still changing when the run ended, so these coefficients are a snapshot rather than a settled answer. Treat them as provisional.';
+  } else if (m.converged === true) {
+    tone = 'ok';
+    const n = m.sampleCount || 0;
+    text = `<strong>Converged.</strong> Averaged over the final ${n} iterations; the ± figures show how much the flow was still oscillating.`;
+  }
+
+  if (!tone) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const warn = tone === 'warn';
+  banner.style.color = warn ? 'var(--danger-color)' : 'var(--accent-cyan)';
+  banner.style.background = warn ? 'rgba(255, 61, 0, 0.05)' : 'rgba(0, 229, 255, 0.05)';
+  banner.style.border = `1px solid ${warn ? 'rgba(255, 61, 0, 0.15)' : 'var(--accent-cyan-glow)'}`;
+  banner.innerHTML = text;
+  banner.style.display = 'block';
+}
+
 function displayCfdResults(job) {
   showCfdMonitor(false);
   showCfdResults(true);
@@ -2374,7 +2449,12 @@ function displayCfdResults(job) {
   updateResultsSpeedLabels(jobSpeedMph);
 
   const m = job.metrics;
-  if (!m) return;
+  if (!m) {
+    // The run finished but the coefficients could not be derived. Say so —
+    // an empty panel with no explanation is worse than no panel at all.
+    renderResultBanner({ metricsError: job.metricsError || 'No aerodynamic results were produced for this run. Check the run log.' });
+    return;
+  }
 
   const density = 1.225; // kg/m³
   const speed = jobSpeedMph * MPH_TO_MS;
@@ -2388,10 +2468,15 @@ function displayCfdResults(job) {
   const liftForce = m.liftForce !== undefined ? m.liftForce : (0.5 * density * speed * speed * claVal);
   const aeroPower = m.aeroPower !== undefined ? m.aeroPower : (dragForce * speed);
   
-  document.getElementById('cfd-cd').textContent = cdVal.toFixed(3);
+  // Show the spread when the run reports one. A steady solve of a bluff body
+  // keeps oscillating even once converged, so the value is a mean over the
+  // final iterations and the ± is how much it was still moving by.
+  document.getElementById('cfd-cd').textContent = formatCoefficient(cdVal, m.cdStd);
   document.getElementById('cfd-cda').textContent = cdaVal.toFixed(4) + ' m²';
-  document.getElementById('cfd-cl').textContent = clVal.toFixed(3);
+  document.getElementById('cfd-cl').textContent = formatCoefficient(clVal, m.clStd);
   document.getElementById('cfd-cla').textContent = claVal.toFixed(4) + ' m²';
+
+  renderResultBanner(m);
   
   document.getElementById('cfd-drag-force').textContent = dragForce.toFixed(1) + ' N';
   document.getElementById('cfd-lift-force').textContent = liftForce.toFixed(1) + ' N';

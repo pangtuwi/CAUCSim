@@ -262,7 +262,7 @@ const getJobState = async (jobId) => {
 
 // 1. POST /api/jobs: Queue/start simulation
 app.post('/api/jobs', requireAuth, async (req, res) => {
-  const { fileKey, frontalArea, raceSpeedMph } = req.body;
+  const { fileKey, frontalArea, raceSpeedMph, wheelbase, momentCentreX, fastCheck } = req.body;
   if (!fileKey) {
     return res.status(400).json({ error: 'fileKey is required' });
   }
@@ -276,6 +276,13 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     ? Math.min(100, raceSpeedMph)
     : DEFAULT_RACE_SPEED_MPH;
   const raceSpeedMs = cleanRaceSpeedMph * MPH_TO_MS;
+  // Wheelbase (m) normalises Cm; the moment centre is the point Cm is taken
+  // about. Both are left null when absent so the template keeps its own value.
+  const cleanWheelbase = typeof wheelbase === 'number' && isFinite(wheelbase) && wheelbase > 0 ? wheelbase : null;
+  const cleanMomentCentreX = typeof momentCentreX === 'number' && isFinite(momentCentreX) ? momentCentreX : null;
+  // Strict boolean: anything else means full fidelity, so a malformed request
+  // can never silently downgrade a run to the coarse mesh.
+  const cleanFastCheck = fastCheck === true;
 
   const initialJobState = {
     jobId,
@@ -291,7 +298,10 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     jobToken,
     metrics: null,
     frontalArea: cleanFrontalArea,
-    raceSpeedMph: cleanRaceSpeedMph
+    raceSpeedMph: cleanRaceSpeedMph,
+    wheelbase: cleanWheelbase,
+    momentCentreX: cleanMomentCentreX,
+    fastCheck: cleanFastCheck
   };
 
   try {
@@ -369,6 +379,9 @@ STL_KEY="${cleanFileKey}"
 TEMPLATE_KEY="case-template.zip"
 AWS_REGION="${region}"
 FRONTAL_AREA="${cleanFrontalArea !== null ? cleanFrontalArea : ''}"
+WHEELBASE="${cleanWheelbase !== null ? cleanWheelbase.toFixed(4) : ''}"
+MOMENT_CENTRE_X="${cleanMomentCentreX !== null ? cleanMomentCentreX.toFixed(4) : ''}"
+FAST_CHECK="${cleanFastCheck ? '1' : ''}"
 RACE_SPEED="${raceSpeedMs.toFixed(4)}"
 TURB_KE="${(0.24 * Math.pow(raceSpeedMs / TEMPLATE_REF_SPEED_MS, 2)).toFixed(5)}"
 TURB_OMEGA="${(1.78 * (raceSpeedMs / TEMPLATE_REF_SPEED_MS)).toFixed(5)}"
@@ -512,6 +525,32 @@ if [ -n "$FRONTAL_AREA" ]; then
   sed -i -E "s|Aref[[:space:]]+[0-9.]+;|Aref            \$FRONTAL_AREA;|g" system/forceCoeffs
 fi
 
+# Update the reference length (lRef) used to normalise Cm. Left alone when the
+# client sent no wheelbase, so the template's own fallback stands.
+if [ -n "$WHEELBASE" ]; then
+  echo "==> Updating lRef in system/forceCoeffs to $WHEELBASE..."
+  sed -i -E "s|lRef[[:space:]]+[0-9.]+;|lRef            \$WHEELBASE;|g" system/forceCoeffs
+fi
+
+# Update the moment centre (CofR) that Cm is taken about: the model's
+# mid-length on the ground plane, matching the template's convention.
+if [ -n "$MOMENT_CENTRE_X" ]; then
+  echo "==> Updating CofR in system/forceCoeffs to ($MOMENT_CENTRE_X 0 0)..."
+  sed -i -E "s|CofR[[:space:]]+\\([^)]*\\);|CofR            (\$MOMENT_CENTRE_X 0 0);|g" system/forceCoeffs
+fi
+
+# Fast check: patch the case back down to a coarse mesh and a short run. This
+# is a deliberately inaccurate sanity check, not a result - the convergence
+# test on the reported coefficients will (correctly) fail for these runs.
+if [ "$FAST_CHECK" = "1" ]; then
+  echo "==> FAST CHECK MODE: coarse mesh and 50 iterations - results are NOT accurate."
+  sed -i -E "s|endTime[[:space:]]+500;|endTime         50;|g" system/controlDict
+  sed -i -E "s|writeInterval[[:space:]]+100;|writeInterval   50;|g" system/controlDict
+  sed -i -E "s|level \\(5 6\\);|level (3 4);|g" system/snappyHexMeshDict
+  sed -i -E "s|level[[:space:]]+4;|level   2;|g" system/snappyHexMeshDict
+  sed -i -E "s|\\(40 16 16\\)|(20 8 8)|g" system/blockMeshDict
+fi
+
 # Apply the user-selected race speed to the inlet, the force-coefficient
 # reference velocity, and the turbulence inlet values (scaled to keep the
 # template's turbulence intensity constant).
@@ -631,51 +670,10 @@ else
   echo "==> Skipping 3D visualisation (no streamline tracks found, or pvpython/xvfb-run unavailable)."
 fi
 
-# Calculate force coefficients and compile aerodynamic metrics
-METRICS_JSON="{}"
-COEFFS_FILE="postProcessing/forceCoeffs/0/forceCoeffs.dat"
-if [ -f "\$COEFFS_FILE" ]; then
-  METRICS_JSON=\$(python3 - <<EOF
-import json
-try:
-    with open("\$COEFFS_FILE", "r") as f:
-        lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-    if lines:
-        last_line = lines[-1].split()
-        time = float(last_line[0])
-        cm = float(last_line[1])
-        cd = float(last_line[2])
-        cl = float(last_line[3])
-        
-        # Extract headers if present
-        aref = 1.0
-        with open("\$COEFFS_FILE", "r") as f:
-            for line in f:
-                if "# Aref" in line:
-                    aref = float(line.split()[-1])
-                    break
-        
-        cda = cd * aref
-        cla = cl * aref
-        
-        print(json.dumps({
-            "cd": cd,
-            "cl": cl,
-            "cm": cm,
-            "cda": cda,
-            "cla": cla,
-            "aref": aref
-        }))
-    else:
-        print("{}")
-except Exception as e:
-    print(json.dumps({"error": str(e)}))
-EOF
-)
-fi
-
+# The API server derives the reported coefficients from the forceCoeffs.dat
+# uploaded above, so the droplet does no post-processing of its own.
 # Notify API Server: Finished!
-update_job_status "completed" "completed" "" "\$METRICS_JSON"
+update_job_status "completed" "completed"
 
 # Terminate log sync background process
 kill \$LOG_SYNC_PID || true
@@ -834,6 +832,24 @@ app.get('/api/jobs/:id', requireAuth, async (req, res) => {
     }
   }
 
+  // Derive the coefficients here if the callback never managed it. The droplet
+  // writes job.json to S3 directly and only then curls the callback with
+  // "|| true", so a callback that never arrives (a job started against a
+  // different APP_CALLBACK_URL, a transient network failure) must not cost the
+  // user their results. Derived values are cached back into the job state.
+  if (jobState.status === 'completed' && !jobState.metrics && !jobState.metricsChecked) {
+    const derived = await computeMetricsFromResults(jobId, jobState);
+    if (derived.metrics) {
+      jobState.metrics = applyDerivedForces(derived.metrics, jobState);
+      jobState.metricsError = null;
+    } else {
+      jobState.metricsError = derived.error;
+    }
+    // Only worth one attempt: a missing force history will not appear later.
+    jobState.metricsChecked = true;
+    stateChanged = true;
+  }
+
   if (stateChanged) {
     await saveJobState(jobId, jobState);
   }
@@ -842,6 +858,174 @@ app.get('/api/jobs/:id', requireAuth, async (req, res) => {
   delete clientState.jobToken;
   res.json(clientState);
 });
+
+// --- Force-coefficient reporting -------------------------------------------
+
+// Trailing iterations averaged for the reported value, and the shorter windows
+// used to test whether that average has stopped drifting.
+const COEFF_SAMPLE_WINDOW = 200;
+const COEFF_CHECK_WINDOWS = [100, 150, 200];
+// A window-to-window drift below this is indistinguishable from the flow's own
+// oscillation, so it counts as settled.
+const COEFF_DRIFT_ABS = 0.002;
+const COEFF_DRIFT_REL = 0.01;
+
+function meanOf(values) {
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function stdDevOf(values, mean) {
+  if (values.length < 2) return 0;
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+/**
+ * Reduce an OpenFOAM forceCoeffs.dat history to the coefficients we report.
+ *
+ * A steady RANS solve of a bluff body never settles on a single number: real
+ * vortex shedding leaves a persistent oscillation even once converged. Reading
+ * the final iteration therefore reports one arbitrary point on that
+ * oscillation, and cannot tell a converged run from one still trending. So
+ * average a trailing window instead, and judge convergence by whether that
+ * average is insensitive to how long the window is - drift between windows is
+ * the signal, the oscillation within them is not.
+ *
+ * Returns null when the file yields no usable rows.
+ */
+function computeCoefficientStatistics(fileContents) {
+  if (typeof fileContents !== 'string') return null;
+
+  const rows = [];
+  let aref = null;
+
+  for (const rawLine of fileContents.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.startsWith('#')) {
+      // The header carries the Aref the solve actually used, which is the one
+      // CdA/ClA must be built from.
+      const match = line.match(/^#\s*Aref\s*[:=]?\s*(-?[0-9.eE+-]+)/);
+      if (match) {
+        const parsed = parseFloat(match[1]);
+        if (isFinite(parsed)) aref = parsed;
+      }
+      continue;
+    }
+
+    // Columns: time, Cm, Cd, Cl - the order the previous reader assumed.
+    const fields = line.split(/\s+/);
+    if (fields.length < 4) continue;
+    const cm = parseFloat(fields[1]);
+    const cd = parseFloat(fields[2]);
+    const cl = parseFloat(fields[3]);
+    if (!isFinite(cm) || !isFinite(cd) || !isFinite(cl)) continue;
+    rows.push({ cm, cd, cl });
+  }
+
+  if (rows.length === 0) return null;
+
+  const tail = (n) => rows.slice(Math.max(0, rows.length - n));
+  const sample = tail(Math.min(COEFF_SAMPLE_WINDOW, rows.length));
+
+  const cdValues = sample.map((r) => r.cd);
+  const clValues = sample.map((r) => r.cl);
+  const cmValues = sample.map((r) => r.cm);
+  const cd = meanOf(cdValues);
+  const cl = meanOf(clValues);
+  const cm = meanOf(cmValues);
+
+  // Clamp each check window to the data available. A short run collapses them
+  // all onto the same rows, leaving nothing to compare - which is itself the
+  // answer: convergence has not been demonstrated.
+  const windowSizes = [...new Set(COEFF_CHECK_WINDOWS.map((n) => Math.min(n, rows.length)))];
+  let converged = false;
+  if (windowSizes.length > 1) {
+    converged = ['cd', 'cl'].every((key) => {
+      const windowMeans = windowSizes.map((n) => meanOf(tail(n).map((r) => r[key])));
+      const drift = Math.max(...windowMeans) - Math.min(...windowMeans);
+      const overallMean = key === 'cd' ? cd : cl;
+      const tolerance = Math.max(COEFF_DRIFT_ABS, COEFF_DRIFT_REL * Math.abs(overallMean));
+      return drift <= tolerance;
+    });
+  }
+
+  return {
+    cd,
+    cl,
+    cm,
+    cdStd: stdDevOf(cdValues, cd),
+    clStd: stdDevOf(clValues, cl),
+    cmStd: stdDevOf(cmValues, cm),
+    converged,
+    sampleCount: sample.length,
+    iterations: rows.length,
+    aref
+  };
+}
+
+// Turn the dimensionless coefficients into the forces and power shown in the
+// results panel, at the speed this job was actually solved at.
+function applyDerivedForces(metrics, jobState) {
+  if (metrics.cda) {
+    const raceSpeed = (jobState.raceSpeedMph || DEFAULT_RACE_SPEED_MPH) * MPH_TO_MS;
+    metrics.dragForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cda).toFixed(1));
+    if (metrics.cla) {
+      metrics.liftForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cla).toFixed(1));
+    }
+    metrics.aeroPower = parseFloat((metrics.dragForce * raceSpeed).toFixed(0));
+  }
+  return metrics;
+}
+
+// Build the reported metrics from the forceCoeffs.dat the droplet uploaded
+// before it called back. Returns null if the file is missing or unusable, in
+// which case the caller keeps whatever the droplet sent.
+async function computeMetricsFromResults(jobId, jobState) {
+  const key = `results/${jobId}/forceCoeffs.dat`;
+  let contents;
+
+  try {
+    const response = await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    contents = await response.Body.transformToString();
+  } catch (err) {
+    // Most likely the solver never wrote postProcessing/forceCoeffs/0/forceCoeffs.dat,
+    // so the droplet had nothing to upload.
+    console.error(`[${jobId}] Could not read ${key}: ${err.name || 'error'} - ${err.message}`);
+    return { error: `The solver's force history could not be read (${err.name || 'S3 error'}). Check the run log.` };
+  }
+
+  const stats = computeCoefficientStatistics(contents);
+  if (!stats) {
+    console.error(`[${jobId}] ${key} held no usable rows (${contents.length} bytes).`);
+    return { error: 'The solver produced no usable force history. Check the run log.' };
+  }
+
+  {
+    const round = (v) => parseFloat(v.toFixed(6));
+    const metrics = {
+      cd: round(stats.cd),
+      cl: round(stats.cl),
+      cm: round(stats.cm),
+      cdStd: round(stats.cdStd),
+      clStd: round(stats.clStd),
+      cmStd: round(stats.cmStd),
+      converged: stats.converged,
+      sampleCount: stats.sampleCount,
+      iterations: stats.iterations,
+      fastCheck: jobState.fastCheck === true
+    };
+
+    // Prefer the Aref the solve actually recorded over the one the client sent.
+    const aref = stats.aref !== null ? stats.aref : jobState.frontalArea;
+    if (typeof aref === 'number' && isFinite(aref) && aref > 0) {
+      metrics.aref = aref;
+      metrics.cda = round(stats.cd * aref);
+      metrics.cla = round(stats.cl * aref);
+    }
+    return { metrics };
+  }
+}
 
 // 4. POST /api/jobs/:id/callback: Droplet status callback
 app.post('/api/jobs/:id/callback', async (req, res) => {
@@ -861,16 +1045,26 @@ app.post('/api/jobs/:id/callback', async (req, res) => {
   if (status) jobState.status = status;
   if (stage) jobState.stage = stage;
   if (error) jobState.error = error;
-  if (metrics) {
-    if (metrics.cda) {
-      const raceSpeed = (jobState.raceSpeedMph || DEFAULT_RACE_SPEED_MPH) * MPH_TO_MS;
-      metrics.dragForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cda).toFixed(1));
-      if (metrics.cla) {
-        metrics.liftForce = parseFloat((0.5 * 1.225 * Math.pow(raceSpeed, 2) * metrics.cla).toFixed(1));
-      }
-      metrics.aeroPower = parseFloat((metrics.dragForce * raceSpeed).toFixed(0));
+
+  // The droplet uploads forceCoeffs.dat before it reports completion, so the
+  // coefficients are derived here rather than on the droplet - that keeps the
+  // convergence statistics in testable JS.
+  let resolvedMetrics = metrics;
+  if (status === 'completed') {
+    const derived = await computeMetricsFromResults(jobId, jobState);
+    if (derived.metrics) {
+      resolvedMetrics = derived.metrics;
+      jobState.metricsError = null;
+    } else {
+      // Record why, so the results panel can say something useful instead of
+      // just rendering empty.
+      jobState.metricsError = derived.error;
     }
-    jobState.metrics = metrics;
+  }
+
+  if (resolvedMetrics) {
+    jobState.metrics = applyDerivedForces(resolvedMetrics, jobState);
+    jobState.metricsChecked = true;
   }
   
   if (status === 'completed' || status === 'failed') {
@@ -1036,6 +1230,7 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.computeCoefficientStatistics = computeCoefficientStatistics;
 module.exports.handler = serverless(app, {
   binary: ['image/*', 'application/zip', 'application/octet-stream']
 });

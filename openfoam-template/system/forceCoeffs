@@ -20,11 +20,15 @@ rho             rhoInf;      // Indicates incompressible
 rhoInf          1;           // Redundant for incompressible
 liftDir         (0 0 1);
 dragDir         (1 0 0);
-CofR            (0.72 0 0);  // Axle midpoint on ground
+// CofR, magUInf, lRef and Aref are all SUBSTITUTED PER GEOMETRY by the
+// case-patching block in backend/app/app.js before the case is run. The values
+// below are only fallbacks that keep this file valid on its own — never treat
+// them as correct for any particular car.
+CofR            (0.72 0 0);  // Substituted: moment centre, axle midpoint on ground
 pitchAxis       (0 1 0);
-magUInf         20;
-lRef            1.2;        // Wheelbase length
-Aref            0.197;        // Estimated
+magUInf         20;          // Substituted: race speed (m/s)
+lRef            1.2;         // Substituted: wheelbase (m), normalises Cm
+Aref            0.197;       // Substituted: frontal area (m^2), normalises Cd/Cl
 
 /*
 binData

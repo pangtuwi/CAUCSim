@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.46</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.47</span></p>
         </div>
       </div>
       
@@ -145,14 +145,30 @@
             <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
               Run a steady-state 3D OpenFOAM simulation of the design at the race speed set below.
             </p>
-            <div class="import-options" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
               <label for="race-speed-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Race Speed:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" id="race-speed-input" value="30" min="1" max="100" step="0.5" style="width: 55px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 5px 6px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; text-align: right;">
                 <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">mph (<span id="race-speed-ms-display">13.4</span> m/s)</span>
               </div>
             </div>
-            <button class="btn-primary" id="btn-run-cfd" disabled style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px;">
+
+            <div class="import-options" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+              <label for="wheelbase-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Axle-to-axle distance. Used as the reference length for the pitching-moment coefficient.">Wheelbase:</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="number" id="wheelbase-input" value="" min="0.1" max="10" step="0.01" style="width: 55px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 5px 6px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; text-align: right;">
+                <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">m (from model)</span>
+              </div>
+            </div>
+
+            <div class="import-options" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+              <label for="fast-check-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Coarse mesh and 50 solver steps. Confirms the model runs, but the coefficients are not accurate.">Fast check:</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="fast-check-input" style="width: 14px; height: 14px; accent-color: var(--accent-cyan); cursor: pointer;">
+                <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Quick, not accurate</span>
+              </div>
+            </div>
+            <button class="btn-primary" id="btn-run-cfd" disabled style="margin-top: 7px; width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
                 <path d="M5 3l14 9-14 9V3z"/>
               </svg>
@@ -460,6 +476,10 @@
             </div>
 
             <div class="stage-data-content" id="results-details-loaded" style="display: none;">
+
+            <!-- Convergence / fidelity banner: set by renderCfdMetrics -->
+            <div id="cfd-result-banner" style="display: none; font-size: 11px; line-height: 1.45; padding: 8px 10px; border-radius: 6px; margin-bottom: 12px;"></div>
+
             <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
               <div class="stat-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 6px; padding: 8px; display: flex; flex-direction: column;">
                 <span class="stat-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase;">Drag Coeff (Cd)</span>

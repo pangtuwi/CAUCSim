@@ -36,6 +36,12 @@ The platform utilizes a modern serverless direct-to-storage architecture, bypass
 - **Setup Instructions:** Refer to [AUTHSETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/AUTHSETUP.md) for step-by-step AWS Cognito User Pool creation.
 - **Adding & Managing Users:** Refer to [USER_MANAGEMENT.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/USER_MANAGEMENT.md) for inviting users, resetting passwords, and revoking access.
 
+### 4b. Simulation Accuracy & Convergence
+- **Per-Geometry Reference Values:** The frontal area (`Aref`), wheelbase (`lRef`) and moment centre (`CofR`) in the OpenFOAM case are all substituted from the uploaded model at case-generation time, so the force coefficients are normalised against the car actually being simulated. The wheelbase is pre-filled from the model's bounding-box length in Stage 3 and can be corrected to the measured axle-to-axle figure.
+- **Averaged Results with a Spread:** A steady solve of a bluff body never settles on a single number — real vortex shedding leaves a persistent oscillation. Results are therefore reported as the **mean over the final 200 iterations with its standard deviation** (`Cd = 0.267 ± 0.003`), not as a single final-iteration snapshot.
+- **Convergence Test:** The means over the last 100, 150 and 200 iterations must agree before a run is reported as converged — this measures drift between windows rather than the oscillation within them. A run that has not settled is labelled as provisional in the results panel instead of being presented as a final answer.
+- **Fast Check Mode:** An opt-in checkbox in Stage 3 (**off by default**) that runs a coarse mesh for 50 iterations. Useful for confirming a model runs end-to-end at a fraction of the cost; its results are explicitly flagged as inaccurate and can never report as converged.
+
 ### 5. Elastic Cloud HPC Compute (DigitalOcean)
 - **Scale-to-Zero HPC Droplets:** Launches high-performance dedicated compute droplets (`gd-16vcpu-64gb`) on-demand from a pre-configured OpenFOAM image snapshot using the DigitalOcean API.
 - **Harmless Warning Suppression:** Wraps droplet environment setup in `set +e` and `set -e` to prevent non-critical shell warnings (e.g. bash context `pop_var_context` from `/opt/openfoam13/etc/bashrc` on Ubuntu 24.04) from aborting the boot sequence.
