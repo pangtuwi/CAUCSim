@@ -964,6 +964,156 @@ function computeCoefficientStatistics(fileContents) {
   };
 }
 
+// Convert an OpenFOAM forceCoeffs.dat into CSV for plotting elsewhere.
+//
+// Column names come from the file's own header row rather than being hardcoded,
+// so extra columns (Cl(f), Cl(r), and anything a future template adds) survive
+// the conversion. Deliberately no comment lines: the provenance lives in the
+// Markdown summary, and a leading "#" block would show up as junk rows in
+// Excel. Returns null when there is nothing to convert.
+function buildCoefficientHistoryCsv(fileContents) {
+  if (typeof fileContents !== 'string') return null;
+
+  let columns = null;
+  const rows = [];
+
+  for (const rawLine of fileContents.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (line.startsWith('#')) {
+      // The last commented line naming Time is the column header.
+      const stripped = line.replace(/^#\s*/, '');
+      if (/\bTime\b/.test(stripped)) {
+        const candidate = stripped.split(/\s+/).filter(Boolean);
+        if (candidate.length >= 2) columns = candidate;
+      }
+      continue;
+    }
+
+    const fields = line.split(/\s+/).filter(Boolean);
+    if (fields.length < 2) continue;
+    if (!fields.every((f) => isFinite(parseFloat(f)))) continue;
+    rows.push(fields);
+  }
+
+  if (rows.length === 0) return null;
+
+  const width = Math.max(...rows.map((r) => r.length));
+  let header = columns && columns.length === width
+    ? columns
+    : Array.from({ length: width }, (_, i) => (i === 0 ? 'Time' : `Column${i}`));
+
+  const csv = [header.join(',')];
+  for (const row of rows) {
+    // Pad short rows so every line has the same number of fields.
+    const padded = row.concat(Array(Math.max(0, width - row.length)).fill(''));
+    csv.push(padded.join(','));
+  }
+  return csv.join('\n') + '\n';
+}
+
+// Render a finished job as a self-describing Markdown summary. A bare
+// coefficient is not much use six months later, so the file records what the
+// run was solved at and how far it can be trusted, not just the answer.
+function buildJobSummaryMarkdown(jobState) {
+  const m = jobState.metrics;
+  const lines = [];
+  const speedMph = jobState.raceSpeedMph || DEFAULT_RACE_SPEED_MPH;
+  const speedMs = speedMph * MPH_TO_MS;
+  const na = 'not recorded';
+  const num = (v, dp) => (typeof v === 'number' && isFinite(v) ? v.toFixed(dp) : null);
+  // "0.267 ± 0.003" where a spread was recorded, otherwise the bare value.
+  const coeff = (value, std, dp = 3) => {
+    const base = num(value, dp);
+    if (base === null) return na;
+    const spread = num(std, dp);
+    return spread === null ? base : `${base} ± ${spread}`;
+  };
+
+  lines.push(`# CFD Summary — ${jobState.originalName || 'model'}`);
+  lines.push('');
+  lines.push(`- **Job:** \`${jobState.jobId}\``);
+  lines.push(`- **Model file:** ${jobState.originalName || na}`);
+  lines.push(`- **Started:** ${jobState.startedAt || na}`);
+  lines.push(`- **Completed:** ${jobState.completedAt || na}`);
+  lines.push(`- **Status:** ${jobState.status || na}`);
+  lines.push('');
+
+  // Lead with the caveat: whoever opens this file must see it before the table.
+  if (jobState.fastCheck) {
+    lines.push('> **⚠ Fast check run — these results are not accurate.**');
+    lines.push('> Solved on a coarse mesh for 50 iterations to confirm the model runs.');
+    lines.push('> Re-run with Fast check unticked for a result you can rely on.');
+    lines.push('');
+  } else if (m && m.converged === false) {
+    lines.push('> **⚠ Not converged.** The solution was still changing when the run');
+    lines.push('> ended, so these coefficients are provisional rather than settled.');
+    lines.push('');
+  }
+
+  lines.push('## Simulation inputs');
+  lines.push('');
+  lines.push('| Input | Value |');
+  lines.push('| --- | --- |');
+  lines.push(`| Race speed | ${num(speedMph, 1)} mph (${num(speedMs, 2)} m/s) |`);
+  lines.push(`| Frontal area, \`Aref\` | ${num((m && m.aref) || jobState.frontalArea, 4) || na} m² |`);
+  lines.push(`| Wheelbase, \`lRef\` | ${num(jobState.wheelbase, 3) || na} m |`);
+  lines.push(`| Moment centre, \`CofR\` | ${jobState.momentCentreX !== null && jobState.momentCentreX !== undefined ? `(${num(jobState.momentCentreX, 3)} 0 0)` : na} |`);
+  lines.push(`| Mesh fidelity | ${jobState.fastCheck ? 'Fast check (coarse, 50 iterations)' : 'Full (refined, 500 iterations)'} |`);
+  lines.push('');
+
+  if (!m) {
+    lines.push('## Results');
+    lines.push('');
+    lines.push(jobState.metricsError
+      ? `No aerodynamic results are available for this run. ${jobState.metricsError}`
+      : 'No aerodynamic results are available for this run.');
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  lines.push('## Aerodynamic coefficients');
+  lines.push('');
+  lines.push('| Coefficient | Value |');
+  lines.push('| --- | --- |');
+  lines.push(`| Drag, \`Cd\` | ${coeff(m.cd, m.cdStd)} |`);
+  lines.push(`| Lift, \`Cl\` | ${coeff(m.cl, m.clStd)} |`);
+  lines.push(`| Pitching moment, \`Cm\` | ${coeff(m.cm, m.cmStd)} |`);
+  lines.push(`| Drag area, \`CdA\` | ${num(m.cda, 4) || na} m² |`);
+  lines.push(`| Lift area, \`ClA\` | ${num(m.cla, 4) || na} m² |`);
+  lines.push('');
+
+  lines.push(`## Forces at ${num(speedMph, 1)} mph`);
+  lines.push('');
+  lines.push('| Quantity | Value |');
+  lines.push('| --- | --- |');
+  lines.push(`| Drag force | ${num(m.dragForce, 1) || na} N |`);
+  lines.push(`| Lift force | ${num(m.liftForce, 1) || na} N |`);
+  lines.push(`| Aerodynamic power | ${num(m.aeroPower, 0) || na} W |`);
+  lines.push('');
+
+  lines.push('## Convergence');
+  lines.push('');
+  if (m.converged === true) {
+    lines.push(`Converged. Values are the mean of the final ${m.sampleCount} of ${m.iterations} iterations.`);
+  } else if (m.converged === false) {
+    lines.push(`**Not converged.** Values are the mean of the final ${m.sampleCount} of ${m.iterations} iterations, but that mean was still drifting, so treat them as provisional.`);
+  } else {
+    lines.push('No convergence information was recorded for this run.');
+  }
+  lines.push('');
+  lines.push('The ± figures are the standard deviation across that window. A steady');
+  lines.push('solve of a bluff body keeps oscillating even once converged, so a spread');
+  lines.push('is expected — it is the residual oscillation, not an error bar.');
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  lines.push('Generated by CAUCSim.');
+
+  return lines.join('\n');
+}
+
 // Turn the dimensionless coefficients into the forces and power shown in the
 // results panel, at the speed this job was actually solved at.
 function applyDerivedForces(metrics, jobState) {
@@ -1123,6 +1273,59 @@ app.get('/api/jobs/:id/download', requireAuth, async (req, res) => {
   }
 });
 
+// Model name reduced to something safe to put in a Content-Disposition filename.
+function downloadStem(jobState) {
+  return String(jobState.originalName || 'model')
+    .replace(/\.[^.]*$/, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(0, 60) || 'model';
+}
+
+// 6b. GET /api/jobs/:id/summary: Human-readable Markdown result summary
+app.get('/api/jobs/:id/summary', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  const safeName = downloadStem(jobState);
+
+  res.set('Content-Type', 'text/markdown; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="caucsim-${safeName}-${jobId}.md"`);
+  res.send(buildJobSummaryMarkdown(jobState));
+});
+
+// 6c. GET /api/jobs/:id/history: Full per-iteration force history as CSV
+app.get('/api/jobs/:id/history', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+
+  let contents;
+  try {
+    const response = await s3Client.send(new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/forceCoeffs.dat`
+    }));
+    contents = await response.Body.transformToString();
+  } catch (err) {
+    console.error(`[${jobId}] Could not read forceCoeffs.dat for CSV export: ${err.name} - ${err.message}`);
+    return res.status(404).json({ error: 'No force history is available for this run.' });
+  }
+
+  const csv = buildCoefficientHistoryCsv(contents);
+  if (!csv) {
+    return res.status(404).json({ error: 'The force history contained no usable rows.' });
+  }
+
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="caucsim-${downloadStem(jobState)}-${jobId}-history.csv"`);
+  res.send(csv);
+});
+
 // 7. GET /api/jobs/:id/visualisation: Redirect or serve flow_slice.png
 app.get('/api/jobs/:id/visualisation', requireAuth, async (req, res) => {
   const jobId = req.params.id;
@@ -1231,6 +1434,8 @@ if (require.main === module) {
 
 module.exports = app;
 module.exports.computeCoefficientStatistics = computeCoefficientStatistics;
+module.exports.buildJobSummaryMarkdown = buildJobSummaryMarkdown;
+module.exports.buildCoefficientHistoryCsv = buildCoefficientHistoryCsv;
 module.exports.handler = serverless(app, {
   binary: ['image/*', 'application/zip', 'application/octet-stream']
 });

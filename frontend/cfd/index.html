@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.47</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.48</span></p>
         </div>
       </div>
       
@@ -157,7 +157,7 @@
               <label for="wheelbase-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Axle-to-axle distance. Used as the reference length for the pitching-moment coefficient.">Wheelbase:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" id="wheelbase-input" value="" min="0.1" max="10" step="0.01" style="width: 55px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 5px 6px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; text-align: right;">
-                <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">m (from model)</span>
+                <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">m (of model)</span>
               </div>
             </div>
 
@@ -194,6 +194,20 @@
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                 </svg>
                 Download ZIP
+              </a>
+              <a href="#" id="lnk-download-summary" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14 2v6h6M9 15h6M9 11h3"/>
+                </svg>
+                Download Summary
+              </a>
+              <a href="#" id="lnk-download-history" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;" title="Every solver iteration as CSV, for plotting convergence.">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M7 15l4-5 3 3 4-6"/>
+                </svg>
+                Download History (CSV)
               </a>
               <a href="#" id="lnk-view-log" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;">

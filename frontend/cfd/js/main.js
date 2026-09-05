@@ -2649,6 +2649,73 @@ function initCfdRunner() {
     btnClearCfd.addEventListener('click', clearCfdRun);
   }
   
+  // Both the summary and the CSV history need the bearer token, so neither can
+  // be a plain href: fetch with auth, then hand the browser a blob to save.
+  const bindAuthedDownload = (linkId, buildUrl, fallbackName, failureMessage) => {
+    const link = document.getElementById(linkId);
+    if (!link) return;
+
+    link.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!activeJobId) return;
+
+      try {
+        link.style.pointerEvents = 'none';
+        link.style.opacity = '0.5';
+
+        const res = await fetch(buildUrl(activeJobId), {
+          headers: {
+            'Authorization': `Bearer ${idToken || ''}`
+          }
+        });
+
+        if (!res.ok) {
+          // The server explains a missing history; prefer its wording.
+          let detail = '';
+          try {
+            const body = await res.json();
+            if (body && body.error) detail = ` ${body.error}`;
+          } catch (parseErr) { /* not JSON; the generic message will do */ }
+          alert(`${failureMessage}${detail}`);
+          return;
+        }
+
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : fallbackName(activeJobId);
+
+        const blobUrl = URL.createObjectURL(new Blob([await res.text()], { type: 'text/plain' }));
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error(err);
+        alert(failureMessage);
+      } finally {
+        link.style.pointerEvents = 'auto';
+        link.style.opacity = '1';
+      }
+    });
+  };
+
+  bindAuthedDownload(
+    'lnk-download-summary',
+    (jobId) => `/api/jobs/${jobId}/summary`,
+    (jobId) => `caucsim-summary-${jobId}.md`,
+    'Failed to generate the summary.'
+  );
+
+  bindAuthedDownload(
+    'lnk-download-history',
+    (jobId) => `/api/jobs/${jobId}/history`,
+    (jobId) => `caucsim-history-${jobId}.csv`,
+    'Failed to download the force history.'
+  );
+
   if (downloadLnk) {
     downloadLnk.addEventListener('click', async (e) => {
       e.preventDefault();

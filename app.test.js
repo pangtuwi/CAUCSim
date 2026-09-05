@@ -410,6 +410,104 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       });
     });
 
+    describe('GET /api/jobs/:id/summary', () => {
+      const seed = (jobId) => {
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId, status: 'completed', stage: 'completed',
+          updatedAt: new Date().toISOString(), originalName: 'my car.stl',
+          raceSpeedMph: 30, wheelbase: 1.8, momentCentreX: 1.17, fastCheck: true,
+          metricsChecked: true,
+          metrics: { cd: 0.282, cl: -0.091, cm: -0.143, cdStd: 0.113, converged: false,
+                     sampleCount: 51, iterations: 51, aref: 0.657129 }
+        });
+      };
+
+      it('requires auth', async () => {
+        const response = await request(app).get('/api/jobs/any-job/summary');
+        expect(response.status).toBe(401);
+      });
+
+      it('404s for an unknown job', async () => {
+        const response = await request(app)
+          .get('/api/jobs/no-such-job/summary')
+          .set('Authorization', authHeaderValue);
+        expect(response.status).toBe(404);
+      });
+
+      it('serves Markdown as a download', async () => {
+        const jobId = 'job-summary-download';
+        seed(jobId);
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}/summary`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toMatch(/text\/markdown/);
+        expect(response.headers['content-disposition']).toMatch(/^attachment;/);
+        expect(response.text).toContain('# CFD Summary');
+        expect(response.text).toContain('0.282 ± 0.113');
+      });
+
+      // The model name reaches a filename, so it must not carry spaces or
+      // anything that would break the Content-Disposition header.
+      it('sanitises the model name into the filename', async () => {
+        const jobId = 'job-summary-filename';
+        seed(jobId);
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}/summary`)
+          .set('Authorization', authHeaderValue);
+
+        const disposition = response.headers['content-disposition'];
+        expect(disposition).toContain(`caucsim-my_car-${jobId}.md`);
+        expect(disposition).not.toContain(' car');
+      });
+    });
+
+    describe('GET /api/jobs/:id/history', () => {
+      const HISTORY = '# Time\tCm\tCd\tCl\n1\t-0.05\t0.31\t-0.19\n2\t-0.06\t0.32\t-0.20\n';
+
+      const seed = (jobId, withHistory) => {
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId, status: 'completed', stage: 'completed', originalName: 'my car.stl',
+          updatedAt: new Date().toISOString(), metricsChecked: true, metrics: { cd: 0.31 }
+        });
+        if (withHistory) mockInMemoryS3[`results/${jobId}/forceCoeffs.dat`] = HISTORY;
+      };
+
+      it('requires auth', async () => {
+        const response = await request(app).get('/api/jobs/any-job/history');
+        expect(response.status).toBe(401);
+      });
+
+      it('serves CSV as a download', async () => {
+        const jobId = 'job-history-ok';
+        seed(jobId, true);
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}/history`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toMatch(/text\/csv/);
+        expect(response.headers['content-disposition']).toContain(`caucsim-my_car-${jobId}-history.csv`);
+        expect(response.text.split('\n')[0]).toBe('Time,Cm,Cd,Cl');
+      });
+
+      it('404s with an explanation when no history was uploaded', async () => {
+        const jobId = 'job-history-missing';
+        seed(jobId, false);
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}/history`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(404);
+        expect(response.body.error).toMatch(/force history/i);
+      });
+    });
+
     describe('fast check mode', () => {
       it('records an explicit fast check', async () => {
         const state = await createJobWithState({ fastCheck: true });
