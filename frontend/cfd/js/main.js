@@ -1494,6 +1494,34 @@ function bindEvents() {
     setPressureVisible(!pressureToggleActive);
   });
 
+  // The toolbar scrolls horizontally when its control groups don't all fit
+  // (see .viewport-toolbar in style.css), but a bare overflow-x scrollbar
+  // gives no hint that the centreline/outboard/pressure buttons exist off
+  // to the right -- these arrows make that discoverable and clickable.
+  const viewportToolbar = document.getElementById('viewport-toolbar');
+  const toolbarScrollLeftBtn = document.getElementById('toolbar-scroll-left');
+  const toolbarScrollRightBtn = document.getElementById('toolbar-scroll-right');
+  if (viewportToolbar && toolbarScrollLeftBtn && toolbarScrollRightBtn) {
+    const updateToolbarScrollButtons = () => {
+      const maxScrollLeft = viewportToolbar.scrollWidth - viewportToolbar.clientWidth;
+      toolbarScrollLeftBtn.hidden = viewportToolbar.scrollLeft <= 1;
+      toolbarScrollRightBtn.hidden = viewportToolbar.scrollLeft >= maxScrollLeft - 1;
+    };
+    toolbarScrollLeftBtn.addEventListener('click', () => {
+      viewportToolbar.scrollBy({ left: -120, behavior: 'smooth' });
+    });
+    toolbarScrollRightBtn.addEventListener('click', () => {
+      viewportToolbar.scrollBy({ left: 120, behavior: 'smooth' });
+    });
+    viewportToolbar.addEventListener('scroll', updateToolbarScrollButtons);
+    // The toolbar's available width also changes without a window resize --
+    // e.g. the model title (its flex sibling) grows during "Loading 3D
+    // mesh... (name.stl)" -- so watch the toolbar's own box, not just the
+    // window.
+    new ResizeObserver(updateToolbarScrollButtons).observe(viewportToolbar);
+    updateToolbarScrollButtons();
+  }
+
   // Unit Mode Selector change
   const unitSelect = document.getElementById('unit-select');
   unitSelect.addEventListener('change', () => {

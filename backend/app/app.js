@@ -633,8 +633,13 @@ fi
 # foamToVTK writes into a VTK/ directory whose exact filename varies by
 # OpenFOAM build, so search for it rather than hardcoding a path (same
 # defensive idiom used for the streamline tracks and cutPlane slice below).
+# NOTE: OpenFOAM-13's foamToVTK has no '-patches' option to restrict output
+# to one named patch (it errored out immediately with every run until this
+# was found and removed) -- '-noInternal' is the correct way to skip the
+# (expensive, unused here) full volume mesh and only write the boundary
+# patches, one file per patch, which the search below then filters by name.
 echo "==> Exporting car surface pressure (patch f24)..."
-foamToVTK -patches '(f24)' -fields '(p)' -latestTime || echo "==> foamToVTK surface pressure export failed."
+foamToVTK -fields '(p)' -latestTime -noInternal || echo "==> foamToVTK surface pressure export failed."
 PRESSURE_FILE=\$(find VTK -iname "*f24*.vtp" 2>/dev/null | sort -V | tail -n 1)
 if [ -z "\$PRESSURE_FILE" ]; then
   PRESSURE_FILE=\$(find VTK -iname "*f24*.vtk" 2>/dev/null | sort -V | tail -n 1)

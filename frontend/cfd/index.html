@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.51</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.52</span></p>
         </div>
       </div>
       
@@ -242,8 +242,12 @@
               <span class="model-status-tag" id="active-model-status" style="display: none;">Active</span>
             </div>
             
-            <div class="viewport-toolbar">
-              <div class="control-group-label">Shading</div>
+            <div class="viewport-toolbar-wrap">
+            <button class="toolbar-scroll-btn left" id="toolbar-scroll-left" title="Scroll toolbar left" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="viewport-toolbar" id="viewport-toolbar">
+              <div class="control-group-label">|</div>
               <div class="control-group">
                 <button class="btn-toggle active" data-render-mode="shaded" title="Shaded Solid">Solid</button>
                 <button class="btn-toggle" data-render-mode="wireframe" title="Wireframe Mesh">Wire</button>
@@ -252,7 +256,7 @@
               
               <div class="toolbar-divider"></div>
               
-              <div class="control-group-label">Camera</div>
+              <div class="control-group-label">|</div>
               <div class="control-group">
                 <button class="btn-action" data-view="iso">ISO</button>
                 <button class="btn-action" data-view="top">TOP</button>
@@ -260,7 +264,7 @@
                 <button class="btn-action" data-view="side">SIDE</button>
               </div>
 
-              <div class="toolbar-divider"></div>
+              <div class="control-group-label">|</div>
 
               <div class="control-group">
                 <button class="btn-toggle-icon active" id="toggle-grid" title="Toggle Ground Grid">
@@ -275,12 +279,8 @@
                 </button>
               </div>
 
-              <div class="toolbar-divider"></div>
+              <div class="control-group-label">|</div>
 
-              <!-- No text labels here (unlike Shading/Camera) to keep this
-                   fixed-height toolbar from overflowing -- same reasoning as
-                   the label-less Grid/Axes group above; each button's title
-                   attribute carries the name instead. -->
               <div class="control-group">
                 <button class="btn-toggle-icon" id="toggle-streamlines-centreline" title="Toggle Centreline Streamlines" disabled>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -304,6 +304,10 @@
                   </svg>
                 </button>
               </div>
+            </div>
+            <button class="toolbar-scroll-btn right" id="toolbar-scroll-right" title="Scroll toolbar right" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
             </div>
 
             <div class="viewport-legend" id="pressure-legend" style="display: none;">

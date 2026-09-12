@@ -564,10 +564,24 @@ body {
 }
 
 /* Viewport Toolbar */
+/* Wraps the scrollable toolbar plus its two scroll-arrow buttons, which
+   overlay its left/right edges. Scrolling this toolbar horizontally is not
+   discoverable on its own (no visible scrollbar, no hint) -- without the
+   arrows, users have no way to know the centreline/outboard/pressure
+   buttons exist when they don't fit, since they're silently clipped
+   past the container edge with nothing to indicate more content. */
+.viewport-toolbar-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
 .viewport-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   /* The header's height is fixed, so on narrower screens (more control
      groups than fit) this scrolls horizontally within the toolbar's own
      row instead of silently clipping the rightmost buttons off-screen.
@@ -584,6 +598,51 @@ body {
   flex-shrink: 0;
 }
 
+/* Scroll-arrow buttons overlaid on the toolbar's edges -- shown by main.js
+   only when there is actually more content to scroll to in that direction. */
+.toolbar-scroll-btn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  color: var(--accent-cyan);
+  z-index: 2;
+  padding: 0;
+}
+
+.toolbar-scroll-btn.left {
+  left: 0;
+  background: linear-gradient(to right, rgba(10, 14, 23, 0.95) 40%, transparent);
+}
+
+.toolbar-scroll-btn.right {
+  right: 0;
+  background: linear-gradient(to left, rgba(10, 14, 23, 0.95) 40%, transparent);
+}
+
+/* The unconditional `display: flex` above is author-origin CSS, so it beats
+   the browser's default `[hidden] { display: none }` UA-stylesheet rule
+   regardless of selector specificity -- without this, setting .hidden in
+   JS has no visible effect and the button stays on screen. */
+.toolbar-scroll-btn[hidden] {
+  display: none;
+}
+
+/* Reserve room so a visible scroll-arrow never sits on top of the
+   button nearest that edge. */
+.viewport-toolbar-wrap:has(.toolbar-scroll-btn.left:not([hidden])) .viewport-toolbar {
+  padding-left: 20px;
+}
+
+.viewport-toolbar-wrap:has(.toolbar-scroll-btn.right:not([hidden])) .viewport-toolbar {
+  padding-right: 20px;
+}
+
 .control-group-label {
   font-size: 10px;
   text-transform: uppercase;
@@ -597,8 +656,8 @@ body {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 6px;
-  padding: 3px;
-  gap: 2px;
+  padding: 2px;
+  gap: 1px;
 }
 
 .btn-toggle {
@@ -608,7 +667,7 @@ body {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 11px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
   transition: var(--transition-fast);
@@ -631,7 +690,7 @@ body {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-radius: 4px;
   cursor: pointer;
   transition: var(--transition-fast);
@@ -647,7 +706,7 @@ body {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
   display: flex;
   align-items: center;
