@@ -4,8 +4,9 @@ Project-specific instructions for Claude Code. See `AGENTS.md` for the wider
 architecture, coordinate-system, and testing notes that apply to all agents, and
 `Documentation/ARCHITECTURE-UPGRADE-SPEC.md` for the in-progress migration plan.
 
-## Local development & browser testing
 
+## Local development & browser testing
+- **Do not use worktrees.**  Work directly in the project folder.
 - **Test in Chrome on `http://localhost:3000`.** Use the Claude in Chrome tools
   (`mcp__claude-in-chrome__*`) — the user's real browser — not the in-app Browser
   pane. The app is gated behind AWS Cognito, and the logged-in session lives in
