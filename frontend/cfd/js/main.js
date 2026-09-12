@@ -61,6 +61,11 @@ const libraryList = document.getElementById('library-list');
 const libraryEmpty = document.getElementById('library-empty');
 const refreshBtn = document.getElementById('refresh-library-btn');
 
+// Run History Elements
+const historyModal = document.getElementById('history-modal');
+const historyList = document.getElementById('history-list');
+const historyEmpty = document.getElementById('history-empty');
+
 // Auth Elements
 const authModal = document.getElementById('auth-modal');
 const authForm = document.getElementById('auth-form');
@@ -76,6 +81,7 @@ const authForgotLink = document.getElementById('auth-forgot-link');
 const authBackLink = document.getElementById('auth-back-link');
 const authResendCodeLink = document.getElementById('auth-resend-code-link');
 const btnLogout = document.getElementById('btn-logout');
+const btnHistory = document.getElementById('btn-history');
 const wheelbaseInput = document.getElementById('wheelbase-input');
 const fastCheckInput = document.getElementById('fast-check-input');
 
@@ -1530,10 +1536,12 @@ function validateSession() {
   if (idToken) {
     authModal.style.display = 'none';
     btnLogout.style.display = 'block';
+    btnHistory.style.display = 'block';
     fetchLibrary();
   } else {
     authModal.style.display = 'flex';
     btnLogout.style.display = 'none';
+    btnHistory.style.display = 'none';
   }
 }
 
@@ -1860,6 +1868,12 @@ authResendCodeLink.addEventListener('click', async () => {
 
 btnLogout.addEventListener('click', handleLogout);
 
+btnHistory.addEventListener('click', openHistoryModal);
+document.getElementById('btn-close-history')?.addEventListener('click', () => {
+  historyModal.style.display = 'none';
+});
+document.getElementById('btn-return-active-run')?.addEventListener('click', returnToActiveRun);
+
 function handleLoginSuccess(token) {
   idToken = token;
   localStorage.setItem('caucsim_id_token', token);
@@ -1880,6 +1894,12 @@ let cfdPollInterval = null;
 let activeJobId = localStorage.getItem('caucsim_active_job_id') || null;
 let isConsoleCollapsed = false;
 let activeFlowImageUrl = null;
+// True while Stage 4 is showing a past run pulled up from Run History rather
+// than the run actually tracked by activeJobId/localStorage — gates the
+// localStorage writes below so browsing history can never clobber the
+// pointer to whatever run is really active.
+let viewingHistoryReadOnly = false;
+let savedActiveJobIdBeforeHistory = null;
 
 function showCfdMonitor(show) {
   // 'flex', not 'block': the monitor is a flex column and its console child
@@ -1898,12 +1918,150 @@ function showCfdResults(show) {
   if (el) el.style.display = show ? 'block' : 'none';
 }
 
+async function openHistoryModal() {
+  historyModal.style.display = 'flex';
+  historyList.innerHTML = '';
+  historyEmpty.style.display = 'none';
+  try {
+    const response = await fetch('/api/jobs', {
+      headers: { 'Authorization': `Bearer ${idToken || ''}` }
+    });
+    if (response.status === 401) {
+      handleLogout();
+      return;
+    }
+    if (!response.ok) throw new Error('Failed to load run history');
+    const jobs = await response.json();
+    renderHistoryList(jobs);
+  } catch (err) {
+    console.error('Error loading run history:', err);
+    historyEmpty.textContent = 'Failed to load run history.';
+    historyEmpty.style.display = 'block';
+  }
+}
+
+function renderHistoryList(jobs) {
+  historyList.innerHTML = '';
+
+  if (!jobs || jobs.length === 0) {
+    historyEmpty.textContent = 'No past runs found.';
+    historyEmpty.style.display = 'block';
+    return;
+  }
+
+  historyEmpty.style.display = 'none';
+
+  jobs.forEach(job => {
+    const li = document.createElement('li');
+    li.className = 'model-item';
+    li.dataset.jobid = job.jobId;
+
+    const dateStr = job.startedAt ? new Date(job.startedAt).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : 'Unknown date';
+
+    const statusColors = {
+      completed: '#00e08a',
+      failed: '#ff4d4d',
+      running: '#00f0ff',
+      queued: '#ffaa00'
+    };
+    const statusColor = statusColors[job.status] || '#ffaa00';
+    const cdText = job.metrics && job.metrics.cd !== undefined ? `Cd ${job.metrics.cd.toFixed(3)}` : '';
+
+    li.innerHTML = `
+      <div class="model-item-details">
+        <span class="model-item-name" title="${job.runName || job.originalName || job.jobId}">${job.runName || job.originalName || job.jobId}</span>
+        <div class="model-item-meta">
+          <span style="color: ${statusColor};">${job.status || 'unknown'}</span>
+          <span>•</span>
+          <span>${dateStr}</span>
+          ${cdText ? `<span>•</span><span>${cdText}</span>` : ''}
+        </div>
+      </div>
+    `;
+
+    li.addEventListener('click', () => viewHistoricalJob(job.jobId));
+    historyList.appendChild(li);
+  });
+}
+
+async function viewHistoricalJob(jobId) {
+  const wasPolling = !!cfdPollInterval;
+  if (wasPolling) savedActiveJobIdBeforeHistory = activeJobId;
+  stopCfdPolling();
+
+  try {
+    const response = await fetch(`/api/jobs/${jobId}`, {
+      headers: { 'Authorization': `Bearer ${idToken || ''}` }
+    });
+    if (response.status === 401) {
+      handleLogout();
+      return;
+    }
+    if (!response.ok) throw new Error('Failed to load run details');
+    const job = await response.json();
+
+    historyModal.style.display = 'none';
+    viewingHistoryReadOnly = true;
+    activeJobId = job.jobId;
+
+    unlockStage(3);
+    unlockStage(4);
+    switchStage(4);
+    updateCfdMonitorState(job);
+    await fetchCfdLogs();
+
+    if (job.status === 'completed') {
+      displayCfdResults(job);
+    } else if (job.status === 'failed') {
+      displayFailedCfdState(job);
+    } else {
+      showCfdMonitor(true);
+      showCfdResults(false);
+    }
+
+    const banner = document.getElementById('history-readonly-banner');
+    const bannerText = document.getElementById('history-readonly-banner-text');
+    if (banner) {
+      banner.style.display = wasPolling ? 'flex' : 'none';
+      if (bannerText) bannerText.textContent = `Viewing past run: ${job.runName || job.originalName || job.jobId} (read-only)`;
+    }
+  } catch (err) {
+    console.error('Error loading historical run:', err);
+    alert('Failed to load that run.');
+  }
+}
+
+function returnToActiveRun() {
+  viewingHistoryReadOnly = false;
+  activeJobId = savedActiveJobIdBeforeHistory;
+  savedActiveJobIdBeforeHistory = null;
+
+  const banner = document.getElementById('history-readonly-banner');
+  if (banner) banner.style.display = 'none';
+
+  if (activeJobId) {
+    startCfdPolling();
+  }
+}
+
 async function startCfdSimulation() {
   if (!activeFileKey) {
     alert("Please load a geometry model first.");
     return;
   }
-  
+
+  // Starting a fresh run always takes over Stage 4 for real — drop any
+  // read-only historical view so it can't shadow the new run's polling.
+  viewingHistoryReadOnly = false;
+  savedActiveJobIdBeforeHistory = null;
+  const historyBanner = document.getElementById('history-readonly-banner');
+  if (historyBanner) historyBanner.style.display = 'none';
+
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (!btnRunCfd) return;
   btnRunCfd.disabled = true;
@@ -1960,7 +2118,9 @@ async function startCfdSimulation() {
         raceSpeedMph: raceSpeedMph,
         wheelbase: readWheelbase(),
         momentCentreX: currentMomentCentreX,
-        fastCheck: fastCheckInput ? fastCheckInput.checked : false
+        fastCheck: fastCheckInput ? fastCheckInput.checked : false,
+        runName: document.getElementById('run-name-input')?.value || '',
+        purpose: document.getElementById('run-purpose-input')?.value || ''
       })
     });
     
@@ -1975,7 +2135,7 @@ async function startCfdSimulation() {
     
     const job = await response.json();
     activeJobId = job.jobId;
-    localStorage.setItem('caucsim_active_job_id', activeJobId);
+    if (!viewingHistoryReadOnly) localStorage.setItem('caucsim_active_job_id', activeJobId);
     
     // Reset and show console/monitor with updated status
     if (consoleEl) {
@@ -2518,7 +2678,7 @@ function displayFailedCfdState(job) {
 function clearCfdRun() {
   stopCfdPolling();
   activeJobId = null;
-  localStorage.removeItem('caucsim_active_job_id');
+  if (!viewingHistoryReadOnly) localStorage.removeItem('caucsim_active_job_id');
   showCfdMonitor(false);
   showCfdResults(false);
   showResultsSummary(false);
@@ -2621,8 +2781,16 @@ function initCfdRunner() {
       if (e.target === logModal) closeLogModal();
     });
   }
+  if (historyModal) {
+    historyModal.addEventListener('click', (e) => {
+      if (e.target === historyModal) historyModal.style.display = 'none';
+    });
+  }
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeLogModal();
+    if (e.key === 'Escape') {
+      closeLogModal();
+      if (historyModal) historyModal.style.display = 'none';
+    }
   });
   
   if (btnRunCfd) {

@@ -262,7 +262,7 @@ const getJobState = async (jobId) => {
 
 // 1. POST /api/jobs: Queue/start simulation
 app.post('/api/jobs', requireAuth, async (req, res) => {
-  const { fileKey, frontalArea, raceSpeedMph, wheelbase, momentCentreX, fastCheck } = req.body;
+  const { fileKey, frontalArea, raceSpeedMph, wheelbase, momentCentreX, fastCheck, runName, purpose } = req.body;
   if (!fileKey) {
     return res.status(400).json({ error: 'fileKey is required' });
   }
@@ -283,6 +283,9 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
   // Strict boolean: anything else means full fidelity, so a malformed request
   // can never silently downgrade a run to the coarse mesh.
   const cleanFastCheck = fastCheck === true;
+  const trimmedRunName = typeof runName === 'string' ? runName.trim().slice(0, 120) : '';
+  const cleanRunName = trimmedRunName || `${originalName} — ${new Date().toLocaleString()}`;
+  const cleanPurpose = typeof purpose === 'string' ? purpose.trim().slice(0, 1000) : '';
 
   const initialJobState = {
     jobId,
@@ -301,7 +304,11 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     raceSpeedMph: cleanRaceSpeedMph,
     wheelbase: cleanWheelbase,
     momentCentreX: cleanMomentCentreX,
-    fastCheck: cleanFastCheck
+    fastCheck: cleanFastCheck,
+    runName: cleanRunName,
+    purpose: cleanPurpose,
+    userSub: req.user.sub,
+    userEmail: req.user.email
   };
 
   try {
@@ -767,13 +774,15 @@ app.get('/api/jobs', requireAuth, async (req, res) => {
         const response = await s3Client.send(getCommand);
         const raw = await response.Body.transformToString();
         const jobData = JSON.parse(raw);
+        if (jobData.userSub && jobData.userSub !== req.user.sub) return null;
         const clientState = { ...jobData };
         delete clientState.jobToken;
         return clientState;
       })
     );
-    jobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
-    res.json(jobs);
+    const visibleJobs = jobs.filter(Boolean);
+    visibleJobs.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    res.json(visibleJobs);
   } catch (err) {
     console.error("S3 List Jobs Error:", err);
     res.status(500).json({ error: 'Failed to list jobs from S3' });
