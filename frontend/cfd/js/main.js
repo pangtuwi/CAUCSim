@@ -12,6 +12,9 @@ let activeGeometry = null; // Store geometry for volume recalculations
 let gridHelper, axesHelper;
 let activeStreamlineScene = null;
 let streamlinesToggleActive = false;
+// Bumped on every clear/reload so a slow in-flight streamline fetch that
+// resolves after the user has already moved on can't add itself to the scene.
+let streamlineLoadToken = 0;
 let currentRenderMode = 'shaded'; // 'shaded' | 'wireframe' | 'points'
 let activeFilename = null;
 let activeUrl = null;
@@ -410,7 +413,10 @@ function readWheelbase() {
 
 function resetActiveGeometry() {
   clearActiveGeometry();
-  
+  // The active file is going away, so any run/results/streamlines tied to it
+  // must go too — otherwise they linger over whatever is loaded next.
+  clearCfdRun();
+
   const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
   if (btnAnalyseGeometry) {
     btnAnalyseGeometry.disabled = true;
@@ -1894,6 +1900,9 @@ let cfdPollInterval = null;
 let activeJobId = localStorage.getItem('caucsim_active_job_id') || null;
 let isConsoleCollapsed = false;
 let activeFlowImageUrl = null;
+// Bumped on every fetch so a slow in-flight visualisation request that
+// resolves after the user has moved to a different run can't overwrite it.
+let flowVisLoadToken = 0;
 // True while Stage 4 is showing a past run pulled up from Run History rather
 // than the run actually tracked by activeJobId/localStorage — gates the
 // localStorage writes below so browsing history can never clobber the
@@ -2423,37 +2432,46 @@ async function fetchFlowVisualisation(jobId) {
   const loadingEl = document.getElementById('flow-visualisation-loading');
   
   if (!imgEl || !placeholderEl || !loadingEl) return;
-  
+
   // Revoke previous URL to prevent memory leaks
   if (activeFlowImageUrl) {
     URL.revokeObjectURL(activeFlowImageUrl);
     activeFlowImageUrl = null;
   }
-  
+
   // Reset placeholder text
   if (placeholderTextEl) {
     placeholderTextEl.textContent = 'No visualisation image available';
   }
-  
+
   // Clean up any existing handlers to prevent empty src triggering onerror
   imgEl.onload = null;
   imgEl.onerror = null;
   imgEl.src = '';
-  
+
   imgEl.style.display = 'none';
   placeholderEl.style.display = 'none';
   loadingEl.style.display = 'flex';
-  
+
+  flowVisLoadToken++;
+  const requestToken = flowVisLoadToken;
+
   try {
     const res = await fetch(`/api/jobs/${jobId}/visualisation?json=true`, {
       headers: {
         'Authorization': `Bearer ${idToken || ''}`
       }
     });
-    
+
+    // The user may have loaded a different model or run while this was in
+    // flight — a stale response must not overwrite what's now on screen.
+    if (requestToken !== flowVisLoadToken) return;
+
     if (res.ok) {
       const data = await res.json();
-      
+
+      if (requestToken !== flowVisLoadToken) return;
+
       // Register handlers before setting src to ensure correct order
       imgEl.onload = () => {
         imgEl.style.display = 'block';
@@ -2500,6 +2518,7 @@ function setStreamlinesVisible(visible) {
 }
 
 function clearStreamlineScene() {
+  streamlineLoadToken++;
   if (activeStreamlineScene) {
     scene.remove(activeStreamlineScene);
     activeStreamlineScene = null;
@@ -2509,6 +2528,7 @@ function clearStreamlineScene() {
 
 async function fetchStreamlinesModel(jobId) {
   clearStreamlineScene();
+  const requestToken = streamlineLoadToken;
   try {
     const res = await fetch(`/api/jobs/${jobId}/streamlines-model?json=true`, {
       headers: {
@@ -2521,6 +2541,9 @@ async function fetchStreamlinesModel(jobId) {
     const data = await res.json();
     const loader = new GLTFLoader();
     loader.load(data.url, (gltf) => {
+      // The user may have loaded a different model or run while this GLTF was
+      // still downloading — a stale load must not add itself to the scene.
+      if (requestToken !== streamlineLoadToken) return;
       const streamlineScene = gltf.scene;
       // ParaView exports in meters; the app's world units are millimeters (matches loadSTL's m->mm scaling)
       streamlineScene.scale.set(1000, 1000, 1000);
