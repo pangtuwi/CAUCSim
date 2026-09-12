@@ -22,3 +22,7 @@ architecture, coordinate-system, and testing notes that apply to all agents, and
 `frontend/cfd/` is the CFD UI; `backend/app/app.js` is the Express app and Lambda
 handler. `serverless.yaml` stays at the repo root until CloudFront/S3 take over
 serving the frontend (step 2 of the migration spec).
+
+## AWS Agent toolkit
+Set up Agent Toolkit for AWS by following instructions:
+https://raw.githubusercontent.com/aws/agent-toolkit-for-aws/refs/heads/main/setup-instructions/setup.md
