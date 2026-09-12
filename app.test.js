@@ -528,6 +528,60 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       });
     });
 
+    describe('run metadata', () => {
+      it('stores the provided run name, purpose and user attribution', async () => {
+        const state = await createJobWithState({ runName: '  Baseline check  ', purpose: 'Testing rear wing angle' });
+        expect(state).toHaveProperty('runName', 'Baseline check');
+        expect(state).toHaveProperty('purpose', 'Testing rear wing angle');
+        expect(state).toHaveProperty('userSub', 'mock-user-sub-123');
+        expect(state).toHaveProperty('userEmail', 'test@caucsim.co.uk');
+      });
+
+      it('auto-generates a run name when none is provided', async () => {
+        const state = await createJobWithState({});
+        expect(state.runName).toContain('test-car.stl');
+      });
+
+      it('defaults purpose to an empty string when omitted', async () => {
+        const state = await createJobWithState({});
+        expect(state).toHaveProperty('purpose', '');
+      });
+    });
+
+    describe('GET /api/jobs ownership filtering', () => {
+      it('excludes jobs belonging to a different user', async () => {
+        const otherJobId = 'job-other-user';
+        mockInMemoryS3[`results/${otherJobId}/job.json`] = JSON.stringify({
+          jobId: otherJobId, status: 'completed', stage: 'completed',
+          startedAt: new Date().toISOString(), userSub: 'someone-elses-sub'
+        });
+
+        const response = await request(app)
+          .get('/api/jobs')
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.find(j => j.jobId === otherJobId)).toBeUndefined();
+      });
+
+      // Jobs saved before user attribution existed have no userSub at all —
+      // there's no other owner to attribute them to, so they stay visible.
+      it('still shows legacy jobs with no stored owner', async () => {
+        const legacyJobId = 'job-legacy-no-owner';
+        mockInMemoryS3[`results/${legacyJobId}/job.json`] = JSON.stringify({
+          jobId: legacyJobId, status: 'completed', stage: 'completed',
+          startedAt: new Date().toISOString()
+        });
+
+        const response = await request(app)
+          .get('/api/jobs')
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.find(j => j.jobId === legacyJobId)).toBeDefined();
+      });
+    });
+
     it('should list jobs from S3', async () => {
       const response = await request(app)
         .get('/api/jobs')
