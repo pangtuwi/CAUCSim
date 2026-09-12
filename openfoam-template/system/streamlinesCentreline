@@ -1,0 +1,48 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  13
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+
+type            streamlines;
+libs            ("libfieldFunctionObjects.so");
+
+// Output every
+writeControl    writeTime;
+
+// Write format
+setFormat       vtk;
+
+// Track forward (+U) or backward (-U) or both
+direction       forward;
+
+// Names of fields to sample. Should contain above velocity field!
+fields          (p U k);
+
+// Steps particles can travel before being removed
+lifeTime        10000;
+
+// Number of steps per cell (estimate). Set to 1 to disable subcycling.
+nSubCycle       5;
+
+// Cloud name to use
+cloudName       particleTracks;
+
+// Seeding method. This is the "centreline" set: Y is nudged to 0.0011
+// (not literally 0) because the background mesh in blockMeshDict has a
+// cell face exactly at Y=0 -- seeding directly on a mesh face risks
+// interpolation ambiguity/dropped tracks, same reason the sibling
+// `streamlines` (Y=-0.05) and `streamlinesOutboard` (Y=-0.4) files both
+// nudge Z off 0 too.
+seedSampleSet
+{
+    type        lineUniform;
+    start       (-1.001 0.0011 0.0011);
+    end         (-1.001 0.0011 1.0011);
+    nPoints     20;
+}
+
+
+// ************************************************************************* //

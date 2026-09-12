@@ -629,6 +629,32 @@ if [ -f postProcessing/forceCoeffs/0/forceCoeffs.dat ]; then
   aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://\$S3_BUCKET/results/\$JOB_ID/forceCoeffs.dat"
 fi
 
+# Generate surface pressure visualisation (Cp) on the car body patch (f24).
+# foamToVTK writes into a VTK/ directory whose exact filename varies by
+# OpenFOAM build, so search for it rather than hardcoding a path (same
+# defensive idiom used for the streamline tracks and cutPlane slice below).
+echo "==> Exporting car surface pressure (patch f24)..."
+foamToVTK -patches '(f24)' -fields '(p)' -latestTime || echo "==> foamToVTK surface pressure export failed."
+PRESSURE_FILE=\$(find VTK -iname "*f24*.vtp" 2>/dev/null | sort -V | tail -n 1)
+if [ -z "\$PRESSURE_FILE" ]; then
+  PRESSURE_FILE=\$(find VTK -iname "*f24*.vtk" 2>/dev/null | sort -V | tail -n 1)
+fi
+if [ -n "\$PRESSURE_FILE" ] && [ -f "\$PRESSURE_FILE" ] && command -v pvpython >/dev/null 2>&1 && command -v xvfb-run >/dev/null 2>&1; then
+  echo "==> Found surface pressure data: \$PRESSURE_FILE. Running pvpython render_pressure.py..."
+  timeout 300 xvfb-run -a --server-args='-screen 0 1280x1024x24' pvpython render_pressure.py "\$PRESSURE_FILE" "." "\$RACE_SPEED" || echo "==> pvpython surface pressure visualisation failed or timed out; continuing without it."
+  if [ -f pressure_surface.gltf ]; then
+    aws s3 cp pressure_surface.gltf "s3://\$S3_BUCKET/results/\$JOB_ID/pressure_surface.gltf" --content-type "model/gltf+json" || true
+  fi
+  if [ -f pressure_range.json ]; then
+    aws s3 cp pressure_range.json "s3://\$S3_BUCKET/results/\$JOB_ID/pressure_range.json" --content-type "application/json" || true
+  fi
+  if [ -f pressure_surface.png ]; then
+    aws s3 cp pressure_surface.png "s3://\$S3_BUCKET/results/\$JOB_ID/pressure_surface.png" --content-type "image/png" || true
+  fi
+else
+  echo "==> Skipping surface pressure visualisation (no patch surface data found, or pvpython/xvfb-run unavailable)."
+fi
+
 # Generate flow slice image from VTK using python script
 echo "==> Generating flow slice image from VTK..."
 VTK_FILE=\$(find postProcessing/cutPlane -name "yNormal.vtk" | sort -V | tail -n 1)
@@ -652,27 +678,45 @@ else
   echo "==> Flow slice image not found."
 fi
 
-# Generate 3D streamlines visualisation (PNG + GLB) from the OpenFOAM
-# streamlines function object's track output, using headless ParaView
+# Generate 3D streamlines visualisation (PNG + GLTF, one file per seed set)
+# from the OpenFOAM streamlines function objects' track output, using
+# headless ParaView. Three independent seed sets are defined in the case
+# template (system/streamlines "current", system/streamlinesCentreline,
+# system/streamlinesOutboard) -- a missing/empty set must not block the
+# other two, so each is looked up independently.
 echo "==> Locating OpenFOAM streamline tracks for 3D visualisation..."
-TRACKS_FILE=\$(find postProcessing/streamlines -name "*.vtp" 2>/dev/null | sort -V | tail -n 1)
-if [ -z "\$TRACKS_FILE" ]; then
-  TRACKS_FILE=\$(find postProcessing/streamlines -name "*.vtk" 2>/dev/null | sort -V | tail -n 1)
-fi
-if [ -n "\$TRACKS_FILE" ] && [ -f "\$TRACKS_FILE" ] && command -v pvpython >/dev/null 2>&1 && command -v xvfb-run >/dev/null 2>&1; then
-  echo "==> Found streamline tracks: \$TRACKS_FILE. Running pvpython render_flow.py..."
+RENDER_FLOW_ARGS=()
+for SET_SPEC in "current:postProcessing/streamlines" "centreline:postProcessing/streamlinesCentreline" "outboard:postProcessing/streamlinesOutboard"; do
+  SET_NAME="\${SET_SPEC%%:*}"
+  SET_DIR="\${SET_SPEC#*:}"
+  SET_TRACKS=\$(find "\$SET_DIR" -name "*.vtp" 2>/dev/null | sort -V | tail -n 1)
+  if [ -z "\$SET_TRACKS" ]; then
+    SET_TRACKS=\$(find "\$SET_DIR" -name "*.vtk" 2>/dev/null | sort -V | tail -n 1)
+  fi
+  if [ -n "\$SET_TRACKS" ] && [ -f "\$SET_TRACKS" ]; then
+    echo "==> Found '\$SET_NAME' streamline tracks: \$SET_TRACKS"
+    RENDER_FLOW_ARGS+=("\$SET_NAME:\$SET_TRACKS")
+  else
+    echo "==> No streamline tracks found for '\$SET_NAME' (\$SET_DIR)."
+  fi
+done
+
+if [ \${#RENDER_FLOW_ARGS[@]} -gt 0 ] && command -v pvpython >/dev/null 2>&1 && command -v xvfb-run >/dev/null 2>&1; then
+  echo "==> Running pvpython render_flow.py for \${#RENDER_FLOW_ARGS[@]} streamline set(s)..."
   update_job_status "running" "generating_visualisation"
   # pvpython (apt ParaView) needs an X display -- xvfb-run supplies a virtual
   # one. The explicit screen size matters: xvfb-run's bare defaults aren't
   # enough, ParaView's vtkXOpenGLRenderWindow aborts with "bad X server
   # connection" against them (see Documentation/SETUP_DROPLET.md).
-  timeout 300 xvfb-run -a --server-args='-screen 0 1280x1024x24' pvpython render_flow.py "\$TRACKS_FILE" "." || echo "==> pvpython 3D visualisation failed or timed out; continuing without it."
+  timeout 300 xvfb-run -a --server-args='-screen 0 1280x1024x24' pvpython render_flow.py "." "\${RENDER_FLOW_ARGS[@]}" || echo "==> pvpython 3D visualisation failed or timed out; continuing without it."
   if [ -f flow_streamlines_3d.png ]; then
     aws s3 cp flow_streamlines_3d.png "s3://\$S3_BUCKET/results/\$JOB_ID/flow_streamlines_3d.png" --content-type "image/png" || true
   fi
-  if [ -f flow_3d_streamlines.gltf ]; then
-    aws s3 cp flow_3d_streamlines.gltf "s3://\$S3_BUCKET/results/\$JOB_ID/flow_3d_streamlines.gltf" --content-type "model/gltf+json" || true
-  fi
+  for GLTF_NAME in flow_3d_streamlines.gltf flow_3d_streamlines_centreline.gltf flow_3d_streamlines_outboard.gltf; do
+    if [ -f "\$GLTF_NAME" ]; then
+      aws s3 cp "\$GLTF_NAME" "s3://\$S3_BUCKET/results/\$JOB_ID/\$GLTF_NAME" --content-type "model/gltf+json" || true
+    fi
+  done
 else
   echo "==> Skipping 3D visualisation (no streamline tracks found, or pvpython/xvfb-run unavailable)."
 fi
@@ -856,6 +900,21 @@ app.get('/api/jobs/:id', requireAuth, async (req, res) => {
     }
     // Only worth one attempt: a missing force history will not appear later.
     jobState.metricsChecked = true;
+    stateChanged = true;
+  }
+
+  // Same lazy-derivation approach as the coefficients above, for the
+  // surface-pressure Cp range: it comes from a separate S3 artifact
+  // (pressure_range.json) the droplet uploads independently, and is simply
+  // absent for jobs run before this feature shipped or if that export
+  // failed -- that's not an error, it just means no pressure overlay/legend
+  // is available for this job.
+  if (jobState.status === 'completed' && !jobState.pressureRangeChecked) {
+    const pressureRange = await computePressureRangeFromResults(jobId);
+    if (pressureRange) {
+      jobState.metrics = { ...(jobState.metrics || {}), ...pressureRange };
+    }
+    jobState.pressureRangeChecked = true;
     stateChanged = true;
   }
 
@@ -1186,6 +1245,25 @@ async function computeMetricsFromResults(jobId, jobState) {
   }
 }
 
+// Reads the Cp min/max sidecar render_pressure.py writes alongside
+// pressure_surface.gltf, for the frontend's pressure legend. Returns null
+// (not an error) when it's missing -- old jobs, or a job whose pressure
+// export failed, simply have no pressure overlay available.
+async function computePressureRangeFromResults(jobId) {
+  const key = `results/${jobId}/pressure_range.json`;
+  try {
+    const response = await s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    const contents = await response.Body.transformToString();
+    const parsed = JSON.parse(contents);
+    if (typeof parsed.cpMin === 'number' && typeof parsed.cpMax === 'number') {
+      return { cpMin: parsed.cpMin, cpMax: parsed.cpMax };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
 // 4. POST /api/jobs/:id/callback: Droplet status callback
 app.post('/api/jobs/:id/callback', async (req, res) => {
   const jobId = req.params.id;
@@ -1402,23 +1480,32 @@ app.get('/api/jobs/:id/streamlines-image', requireAuth, async (req, res) => {
   }
 });
 
-// 9. GET /api/jobs/:id/streamlines-model: Redirect or serve flow_3d_streamlines.gltf
+// 9. GET /api/jobs/:id/streamlines-model?set=current|centreline|outboard:
+// Redirect or serve the requested seed set's GLTF. "current" (the default,
+// for any caller that omits ?set=) keeps the pre-existing filename so older
+// jobs and any old frontend code path are unaffected.
+const STREAMLINES_GLTF_KEYS = {
+  current: 'flow_3d_streamlines.gltf',
+  centreline: 'flow_3d_streamlines_centreline.gltf',
+  outboard: 'flow_3d_streamlines_outboard.gltf'
+};
 app.get('/api/jobs/:id/streamlines-model', requireAuth, async (req, res) => {
   const jobId = req.params.id;
   const jobState = await getJobState(jobId);
   if (!jobState) {
     return res.status(404).json({ error: 'Job not found' });
   }
+  const gltfFilename = STREAMLINES_GLTF_KEYS[req.query.set] || STREAMLINES_GLTF_KEYS.current;
   try {
     const headCommand = new HeadObjectCommand({
       Bucket: bucketName,
-      Key: `results/${jobId}/flow_3d_streamlines.gltf`
+      Key: `results/${jobId}/${gltfFilename}`
     });
     await s3Client.send(headCommand);
 
     const getCommand = new GetObjectCommand({
       Bucket: bucketName,
-      Key: `results/${jobId}/flow_3d_streamlines.gltf`
+      Key: `results/${jobId}/${gltfFilename}`
     });
     const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
     if (req.query.json === 'true') {
@@ -1432,6 +1519,41 @@ app.get('/api/jobs/:id/streamlines-model', requireAuth, async (req, res) => {
     }
     console.error("Failed to generate S3 URL for streamlines model:", err);
     res.status(500).json({ error: 'Failed to generate streamlines model download URL' });
+  }
+});
+
+// 10. GET /api/jobs/:id/pressure-model: Redirect or serve pressure_surface.gltf
+// (the Cp-colored car surface). Not available for jobs run before this
+// feature shipped -- 404s in that case, same as any other missing artifact.
+app.get('/api/jobs/:id/pressure-model', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  try {
+    const headCommand = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/pressure_surface.gltf`
+    });
+    await s3Client.send(headCommand);
+
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: `results/${jobId}/pressure_surface.gltf`
+    });
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    if (req.query.json === 'true') {
+      res.json({ url });
+    } else {
+      res.redirect(url);
+    }
+  } catch (err) {
+    if (err.name === 'NotFound' || err.name === 'NoSuchKey' || err.code === 'NoSuchKey') {
+      return res.status(404).json({ error: 'Pressure model not found on S3' });
+    }
+    console.error("Failed to generate S3 URL for pressure model:", err);
+    res.status(500).json({ error: 'Failed to generate pressure model download URL' });
   }
 });
 
