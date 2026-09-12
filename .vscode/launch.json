@@ -4,7 +4,7 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Run CAUCSim Server (with Auto-Reload)",
+      "name": "Run CAUCSim Server",
       "skipFiles": [
         "<node_internals>/**"
       ],
@@ -13,7 +13,7 @@
         "--watch"
       ],
       "console": "integratedTerminal",
-      "restart": true
+      "restart": false
     }
   ]
 }
