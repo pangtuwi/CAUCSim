@@ -2908,8 +2908,9 @@ function clearCfdRun() {
     activeFlowImageUrl = null;
   }
 
-  // Clear 3D streamlines from the viewport
-  clearStreamlineScene();
+  // Clear 3D streamlines and pressure overlay from the viewport
+  clearStreamlineScenes();
+  clearPressureScene();
 
   // The log belongs to the run being cleared, so don't leave it on screen
   closeLogModal();
