@@ -1909,6 +1909,9 @@ let flowVisLoadToken = 0;
 // pointer to whatever run is really active.
 let viewingHistoryReadOnly = false;
 let savedActiveJobIdBeforeHistory = null;
+// The model actually loaded before Run History swapped in whatever geometry
+// the viewed run used, so returnToActiveRun can put it back afterwards.
+let savedActiveFileBeforeHistory = null;
 
 function showCfdMonitor(show) {
   // 'flex', not 'block': the monitor is a flex column and its console child
@@ -2015,7 +2018,27 @@ async function viewHistoricalJob(jobId) {
     const job = await response.json();
 
     historyModal.style.display = 'none';
+
+    // Only capture the pre-history model once, on the way in — switching
+    // between two historical jobs must not overwrite it with the previous
+    // historical job's model.
+    if (!viewingHistoryReadOnly) {
+      savedActiveFileBeforeHistory = activeFileKey
+        ? { fileKey: activeFileKey, originalName: activeFilename, viewUrl: activeUrl }
+        : null;
+    }
+    // Setting this before touching the model matters: loadSTL (via
+    // fetchLibrary below) calls clearCfdRun when the fileKey changes, and
+    // clearCfdRun only skips clobbering the real active-job pointer in
+    // localStorage while this flag is already true.
     viewingHistoryReadOnly = true;
+
+    // The run's own geometry, not whatever happens to be in the viewport —
+    // otherwise the streamlines render over a mismatched (or absent) model.
+    if (job.fileKey && job.fileKey !== activeFileKey) {
+      await fetchLibrary(job.fileKey);
+    }
+
     activeJobId = job.jobId;
 
     unlockStage(3);
@@ -2045,7 +2068,26 @@ async function viewHistoricalJob(jobId) {
   }
 }
 
-function returnToActiveRun() {
+async function returnToActiveRun() {
+  // Put back whatever model was in the viewport before history swapped it —
+  // do this first (and awaited: fetchLibrary's loadSTL fires asynchronously
+  // once the file list arrives), since loadSTL/resetActiveGeometry both
+  // route through clearCfdRun and would otherwise wipe the activeJobId
+  // restored below if that landed after this function had already returned.
+  if (savedActiveFileBeforeHistory) {
+    if (savedActiveFileBeforeHistory.fileKey !== activeFileKey) {
+      await fetchLibrary(savedActiveFileBeforeHistory.fileKey);
+    }
+  } else if (activeFileKey) {
+    resetActiveGeometry();
+  }
+  savedActiveFileBeforeHistory = null;
+
+  // loadSTL/resetActiveGeometry above land on Stage 1 or 2 as a side effect
+  // of restoring the model — pull back to Stage 4 for the active run's monitor.
+  unlockStage(4);
+  switchStage(4);
+
   viewingHistoryReadOnly = false;
   activeJobId = savedActiveJobIdBeforeHistory;
   savedActiveJobIdBeforeHistory = null;
