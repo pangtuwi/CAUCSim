@@ -568,6 +568,20 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* The header's height is fixed, so on narrower screens (more control
+     groups than fit) this scrolls horizontally within the toolbar's own
+     row instead of silently clipping the rightmost buttons off-screen.
+     min-width: 0 overrides the flex item default of min-width: auto,
+     which otherwise lets this grow past its container instead of
+     triggering its own overflow-x scrollbar. */
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.viewport-toolbar > * {
+  flex-shrink: 0;
 }
 
 .control-group-label {
@@ -650,10 +664,48 @@ body {
   background: rgba(0, 240, 255, 0.1);
 }
 
+.btn-toggle-icon:disabled,
+.btn-toggle:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-toggle-icon:disabled:hover,
+.btn-toggle:disabled:hover {
+  color: var(--text-secondary);
+  background: none;
+}
+
 .toolbar-divider {
   width: 1px;
   height: 18px;
   background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Pressure (Cp) legend, shown only while the pressure overlay is active */
+.viewport-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.viewport-legend-gradient {
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #3b4cc0, #b40426);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.viewport-legend-title {
+  font-weight: 700;
+  color: var(--text-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* 3D Canvas container */

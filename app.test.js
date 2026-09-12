@@ -410,6 +410,61 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       });
     });
 
+    // Surface pressure (Cp) is a separate, independently-uploaded artifact
+    // from forceCoeffs.dat, so it's derived the same lazy way but tracked
+    // with its own "checked" flag.
+    describe('deriving the pressure range when available', () => {
+      const seedCompletedJob = (jobId, extra = {}) => {
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId,
+          status: 'completed',
+          stage: 'completed',
+          updatedAt: new Date().toISOString(),
+          metricsChecked: true,
+          metrics: { cd: 0.31 },
+          ...extra
+        });
+      };
+
+      it('merges cpMin/cpMax from pressure_range.json into metrics', async () => {
+        const jobId = 'job-pressure-range';
+        seedCompletedJob(jobId);
+        mockInMemoryS3[`results/${jobId}/pressure_range.json`] = JSON.stringify({ cpMin: -1.834, cpMax: 0.972 });
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.metrics.cpMin).toBeCloseTo(-1.834, 6);
+        expect(response.body.metrics.cpMax).toBeCloseTo(0.972, 6);
+        // The pre-existing aero metrics must survive the merge untouched.
+        expect(response.body.metrics.cd).toBe(0.31);
+      });
+
+      it('leaves metrics without cpMin/cpMax for a job with no pressure export', async () => {
+        const jobId = 'job-no-pressure-range';
+        seedCompletedJob(jobId);
+
+        const response = await request(app)
+          .get(`/api/jobs/${jobId}`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.metrics.cpMin).toBeUndefined();
+        expect(response.body.metrics.cpMax).toBeUndefined();
+      });
+
+      it('only attempts the pressure-range derivation once', async () => {
+        const jobId = 'job-pressure-range-once';
+        seedCompletedJob(jobId);
+
+        await request(app).get(`/api/jobs/${jobId}`).set('Authorization', authHeaderValue);
+        const persisted = JSON.parse(mockInMemoryS3[`results/${jobId}/job.json`].toString());
+        expect(persisted.pressureRangeChecked).toBe(true);
+      });
+    });
+
     describe('GET /api/jobs/:id/summary', () => {
       const seed = (jobId) => {
         mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
@@ -743,6 +798,75 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       expect(response.status).toBe(302);
       expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
       expect(response.headers.location).toContain('/flow_3d_streamlines.gltf');
+    });
+
+    it('should redirect to the centreline set gltf when set=centreline is given', async () => {
+      mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines_centreline.gltf`] = Buffer.from('mock gltf data');
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-model?set=centreline`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toContain('/flow_3d_streamlines_centreline.gltf');
+    });
+
+    it('should redirect to the outboard set gltf when set=outboard is given', async () => {
+      mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines_outboard.gltf`] = Buffer.from('mock gltf data');
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-model?set=outboard`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toContain('/flow_3d_streamlines_outboard.gltf');
+    });
+
+    it('should 404 for an older job with no centreline/outboard sets, while current still works', async () => {
+      mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines.gltf`] = Buffer.from('mock gltf data');
+      delete mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines_centreline.gltf`];
+      delete mockInMemoryS3[`results/${testJobId}/flow_3d_streamlines_outboard.gltf`];
+
+      const centrelineResponse = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-model?set=centreline`)
+        .set('Authorization', authHeaderValue);
+      expect(centrelineResponse.status).toBe(404);
+
+      const currentResponse = await request(app)
+        .get(`/api/jobs/${testJobId}/streamlines-model`)
+        .set('Authorization', authHeaderValue);
+      expect(currentResponse.status).toBe(302);
+      expect(currentResponse.headers.location).toContain('/flow_3d_streamlines.gltf');
+    });
+
+    it('should return 404 for pressure-model of a non-existent job', async () => {
+      const response = await request(app)
+        .get('/api/jobs/non-existent-job/pressure-model')
+        .set('Authorization', authHeaderValue);
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 404 if the pressure model does not exist for an existing job', async () => {
+      delete mockInMemoryS3[`results/${testJobId}/pressure_surface.gltf`];
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/pressure-model`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('Pressure model not found');
+    });
+
+    it('should redirect to pressure-model signed URL if it exists', async () => {
+      mockInMemoryS3[`results/${testJobId}/pressure_surface.gltf`] = Buffer.from('mock gltf data');
+
+      const response = await request(app)
+        .get(`/api/jobs/${testJobId}/pressure-model`)
+        .set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
+      expect(response.headers.location).toContain('/pressure_surface.gltf');
     });
 
     it('should redirect to download signed URL when json query param is not provided', async () => {

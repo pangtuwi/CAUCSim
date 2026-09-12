@@ -10,11 +10,25 @@ let activePoints = null;
 let activeWireframe = null;
 let activeGeometry = null; // Store geometry for volume recalculations
 let gridHelper, axesHelper;
-let activeStreamlineScene = null;
-let streamlinesToggleActive = false;
+// Three independently-toggleable streamline seed sets (centreline / current /
+// outboard), each fetched as its own small GLTF -- see fetchStreamlinesModel.
+const STREAMLINE_SET_NAMES = ['centreline', 'current', 'outboard'];
+let streamlineSets = {
+  centreline: { scene: null, visible: false, available: false },
+  current: { scene: null, visible: false, available: false },
+  outboard: { scene: null, visible: false, available: false }
+};
 // Bumped on every clear/reload so a slow in-flight streamline fetch that
 // resolves after the user has already moved on can't add itself to the scene.
 let streamlineLoadToken = 0;
+let activePressureScene = null;
+let pressureToggleActive = false;
+let pressureAvailable = false;
+// Bumped on every clear/reload, same purpose as streamlineLoadToken but
+// tracked separately since the two fetches are independent.
+let pressureLoadToken = 0;
+// Remembers which Shaded/Wire/Points mode was active before the pressure
+// overlay replaced it, so turning pressure off can restore it.
 let currentRenderMode = 'shaded'; // 'shaded' | 'wireframe' | 'points'
 let activeFilename = null;
 let activeUrl = null;
@@ -828,7 +842,11 @@ function clearActiveGeometry() {
 
 function updateRenderMode() {
   if (!activeMesh) return;
-  
+  // While the pressure overlay is showing, it replaces whichever of these
+  // three representations was active -- leave it alone here, and let
+  // setPressureVisible(false) call this again to restore it.
+  if (pressureToggleActive) return;
+
   // Remove all first
   scene.remove(activeMesh);
   scene.remove(activeWireframe);
@@ -1461,10 +1479,19 @@ function bindEvents() {
     axesHelper.visible = toggleAxesBtn.classList.contains('active');
   });
 
-  const toggleStreamlinesBtn = document.getElementById('toggle-streamlines');
-  streamlinesToggleActive = toggleStreamlinesBtn.classList.contains('active');
-  toggleStreamlinesBtn.addEventListener('click', () => {
-    setStreamlinesVisible(!streamlinesToggleActive);
+  // Streamline sets are multi-select: each button toggles independently, so
+  // any combination of centreline/current/outboard can be shown together.
+  STREAMLINE_SET_NAMES.forEach(setName => {
+    const btn = document.getElementById(`toggle-streamlines-${setName}`);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      setStreamlinesVisible(setName, !streamlineSets[setName].visible);
+    });
+  });
+
+  const togglePressureBtn = document.getElementById('toggle-pressure');
+  togglePressureBtn.addEventListener('click', () => {
+    setPressureVisible(!pressureToggleActive);
   });
 
   // Unit Mode Selector change
@@ -2548,36 +2575,51 @@ async function fetchFlowVisualisation(jobId) {
   }
 }
 
-// Keeps the viewport toolbar toggle button, the state flag, and the loaded
-// streamline scene's visibility in sync from every call site.
-function setStreamlinesVisible(visible) {
-  streamlinesToggleActive = visible;
-  const btn = document.getElementById('toggle-streamlines');
+// Keeps one streamline set's toggle button, its visible flag, and its loaded
+// scene's visibility in sync from every call site. Sets are multi-select --
+// each is independent, no shared radio state.
+function setStreamlinesVisible(setName, visible) {
+  const set = streamlineSets[setName];
+  if (!set) return;
+  set.visible = visible;
+  const btn = document.getElementById(`toggle-streamlines-${setName}`);
   if (btn) btn.classList.toggle('active', visible);
-  if (activeStreamlineScene) {
-    activeStreamlineScene.visible = visible;
+  if (set.scene) {
+    set.scene.visible = visible;
   }
 }
 
-function clearStreamlineScene() {
+function setStreamlineAvailable(setName, available) {
+  const set = streamlineSets[setName];
+  if (!set) return;
+  set.available = available;
+  const btn = document.getElementById(`toggle-streamlines-${setName}`);
+  if (btn) btn.disabled = !available;
+}
+
+function clearStreamlineScenes() {
   streamlineLoadToken++;
-  if (activeStreamlineScene) {
-    scene.remove(activeStreamlineScene);
-    activeStreamlineScene = null;
-  }
-  setStreamlinesVisible(false);
+  STREAMLINE_SET_NAMES.forEach(setName => {
+    const set = streamlineSets[setName];
+    if (set.scene) {
+      scene.remove(set.scene);
+      set.scene = null;
+    }
+    setStreamlinesVisible(setName, false);
+    setStreamlineAvailable(setName, false);
+  });
 }
 
-async function fetchStreamlinesModel(jobId) {
-  clearStreamlineScene();
-  const requestToken = streamlineLoadToken;
+async function fetchStreamlineSet(jobId, setName, requestToken) {
   try {
-    const res = await fetch(`/api/jobs/${jobId}/streamlines-model?json=true`, {
+    const res = await fetch(`/api/jobs/${jobId}/streamlines-model?set=${setName}&json=true`, {
       headers: {
         'Authorization': `Bearer ${idToken || ''}`
       }
     });
 
+    // Older jobs only have the "current" set's GLTF -- a 404 on centreline
+    // or outboard just means that button stays disabled for this run.
     if (!res.ok) return;
 
     const data = await res.json();
@@ -2590,16 +2632,117 @@ async function fetchStreamlinesModel(jobId) {
       // ParaView exports in meters; the app's world units are millimeters (matches loadSTL's m->mm scaling)
       streamlineScene.scale.set(1000, 1000, 1000);
       streamlineScene.position.set(0, 0, 0);
-      activeStreamlineScene = streamlineScene;
+      streamlineSets[setName].scene = streamlineScene;
       scene.add(streamlineScene);
-      // Streamlines are only viewable here on the car model, so show them as
-      // soon as the run's model arrives; the toolbar toggle can hide them.
-      setStreamlinesVisible(true);
+      setStreamlineAvailable(setName, true);
+      // "current" is the pre-existing set users already expect to see as
+      // soon as a run's model arrives; the two new sets start hidden so the
+      // view isn't unexpectedly busier than before for existing users.
+      setStreamlinesVisible(setName, setName === 'current');
     }, undefined, (err) => {
-      console.error('Error loading 3D flow visualisation scene:', err);
+      console.error(`Error loading '${setName}' streamlines scene:`, err);
     });
   } catch (err) {
-    console.error("Failed to fetch streamlines model:", err);
+    console.error(`Failed to fetch '${setName}' streamlines model:`, err);
+  }
+}
+
+function fetchStreamlinesModel(jobId) {
+  clearStreamlineScenes();
+  const requestToken = streamlineLoadToken;
+  STREAMLINE_SET_NAMES.forEach(setName => {
+    fetchStreamlineSet(jobId, setName, requestToken);
+  });
+}
+
+// Keeps the pressure toggle button, state flag, legend, and loaded scene's
+// visibility in sync. The overlay replaces whichever Shaded/Wire/Points
+// representation is currently shown (they'd otherwise overlap/z-fight), so
+// this also hides those and disables their buttons while pressure is on,
+// restoring them via updateRenderMode() when it's turned back off.
+function setPressureVisible(visible) {
+  pressureToggleActive = visible;
+  const btn = document.getElementById('toggle-pressure');
+  if (btn) btn.classList.toggle('active', visible);
+
+  const legend = document.getElementById('pressure-legend');
+  if (legend) legend.style.display = visible ? 'flex' : 'none';
+
+  document.querySelectorAll('[data-render-mode]').forEach(b => { b.disabled = visible; });
+
+  if (visible) {
+    if (activeMesh) scene.remove(activeMesh);
+    if (activeWireframe) scene.remove(activeWireframe);
+    if (activePoints) scene.remove(activePoints);
+    if (activePressureScene) activePressureScene.visible = true;
+  } else {
+    if (activePressureScene) activePressureScene.visible = false;
+    updateRenderMode();
+  }
+}
+
+function setPressureAvailable(available) {
+  pressureAvailable = available;
+  const btn = document.getElementById('toggle-pressure');
+  if (btn) btn.disabled = !available;
+}
+
+function clearPressureScene() {
+  pressureLoadToken++;
+  if (activePressureScene) {
+    scene.remove(activePressureScene);
+    activePressureScene = null;
+  }
+  setPressureVisible(false);
+  setPressureAvailable(false);
+  const legendMin = document.getElementById('pressure-legend-min');
+  const legendMax = document.getElementById('pressure-legend-max');
+  if (legendMin) legendMin.textContent = '';
+  if (legendMax) legendMax.textContent = '';
+}
+
+// Takes the job object (not just its id) because the Cp legend's min/max
+// come from job.metrics.cpMin/cpMax, lazily derived server-side from the
+// pressure_range.json sidecar (see computePressureRangeFromResults in
+// backend/app/app.js) -- absent entirely for jobs run before this feature
+// shipped.
+async function fetchPressureModel(job) {
+  clearPressureScene();
+  const requestToken = pressureLoadToken;
+  const jobId = job.jobId;
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/pressure-model?json=true`, {
+      headers: {
+        'Authorization': `Bearer ${idToken || ''}`
+      }
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const loader = new GLTFLoader();
+    loader.load(data.url, (gltf) => {
+      if (requestToken !== pressureLoadToken) return;
+      const pressureScene = gltf.scene;
+      // ParaView exports in meters; the app's world units are millimeters (matches loadSTL's m->mm scaling)
+      pressureScene.scale.set(1000, 1000, 1000);
+      pressureScene.position.set(0, 0, 0);
+      pressureScene.visible = false;
+      activePressureScene = pressureScene;
+      scene.add(pressureScene);
+      setPressureAvailable(true);
+
+      const legendMin = document.getElementById('pressure-legend-min');
+      const legendMax = document.getElementById('pressure-legend-max');
+      const cpMin = job.metrics && typeof job.metrics.cpMin === 'number' ? job.metrics.cpMin : null;
+      const cpMax = job.metrics && typeof job.metrics.cpMax === 'number' ? job.metrics.cpMax : null;
+      if (legendMin && cpMin !== null) legendMin.textContent = cpMin.toFixed(2);
+      if (legendMax && cpMax !== null) legendMax.textContent = cpMax.toFixed(2);
+    }, undefined, (err) => {
+      console.error('Error loading surface pressure scene:', err);
+    });
+  } catch (err) {
+    console.error("Failed to fetch pressure model:", err);
   }
 }
 
@@ -2662,6 +2805,7 @@ function displayCfdResults(job) {
   if (job && job.jobId) {
     fetchFlowVisualisation(job.jobId);
     fetchStreamlinesModel(job.jobId);
+    fetchPressureModel(job);
   }
   
   // Reflect the speed the job actually ran at, which may differ from the

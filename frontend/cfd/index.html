@@ -273,12 +273,44 @@
                     <path d="M12 2v20M2 12h20M12 2l4 4M12 2l-4 4"/>
                   </svg>
                 </button>
-                <button class="btn-toggle-icon" id="toggle-streamlines" title="Toggle 3D Streamlines">
+              </div>
+
+              <div class="toolbar-divider"></div>
+
+              <!-- No text labels here (unlike Shading/Camera) to keep this
+                   fixed-height toolbar from overflowing -- same reasoning as
+                   the label-less Grid/Axes group above; each button's title
+                   attribute carries the name instead. -->
+              <div class="control-group">
+                <button class="btn-toggle-icon" id="toggle-streamlines-centreline" title="Toggle Centreline Streamlines" disabled>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 12c3-4 6 4 9 0s6 4 9 0M3 7c3-4 6 4 9 0s6 4 9 0M3 17c3-4 6 4 9 0s6 4 9 0"/>
                   </svg>
                 </button>
+                <button class="btn-toggle-icon" id="toggle-streamlines-current" title="Toggle Current Streamlines" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12c3-4 6 4 9 0s6 4 9 0M3 7c3-4 6 4 9 0s6 4 9 0M3 17c3-4 6 4 9 0s6 4 9 0"/>
+                  </svg>
+                </button>
+                <button class="btn-toggle-icon" id="toggle-streamlines-outboard" title="Toggle Outboard Streamlines" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12c3-4 6 4 9 0s6 4 9 0M3 7c3-4 6 4 9 0s6 4 9 0M3 17c3-4 6 4 9 0s6 4 9 0"/>
+                  </svg>
+                </button>
+                <button class="btn-toggle-icon" id="toggle-pressure" title="Toggle Surface Pressure (Cp)" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 0 1 0 18 5 5 0 0 1 0-10 3 3 0 0 0 0-6 1 1 0 0 0 0 2"/>
+                  </svg>
+                </button>
               </div>
+            </div>
+
+            <div class="viewport-legend" id="pressure-legend" style="display: none;">
+              <span class="viewport-legend-label" id="pressure-legend-min">-1.00</span>
+              <div class="viewport-legend-gradient"></div>
+              <span class="viewport-legend-label" id="pressure-legend-max">1.00</span>
+              <span class="viewport-legend-title">Cp</span>
             </div>
           </div>
 
