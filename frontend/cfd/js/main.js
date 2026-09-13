@@ -2846,7 +2846,7 @@ function displayCfdResults(job) {
   updateResultsSpeedLabels(jobSpeedMph);
 
   const m = job.metrics;
-  if (!m) {
+  if (!m || job.metricsError) {
     // The run finished but the coefficients could not be derived. Say so —
     // an empty panel with no explanation is worse than no panel at all.
     renderResultBanner({ metricsError: job.metricsError || 'No aerodynamic results were produced for this run. Check the run log.' });
