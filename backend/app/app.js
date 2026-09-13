@@ -369,7 +369,13 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     }
 
     // Compile Cloud-Init (User Data Script)
-    const callbackUrl = process.env.APP_CALLBACK_URL || `${req.protocol}://${req.get('host')}`;
+    let callbackUrl = process.env.APP_CALLBACK_URL;
+    if (!callbackUrl) {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(500).json({ error: 'Server misconfiguration: APP_CALLBACK_URL must be set in production.' });
+      }
+      callbackUrl = `${req.protocol}://${req.get('host')}`;
+    }
     let sessionTokenLine = '';
     if (process.env.AWS_SESSION_TOKEN) {
       sessionTokenLine = `export AWS_SESSION_TOKEN="${process.env.AWS_SESSION_TOKEN}"`;
