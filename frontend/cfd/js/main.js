@@ -45,8 +45,8 @@ const MPH_TO_MS = 0.44704;
 const DEFAULT_RACE_SPEED_MPH = 30;
 let raceSpeedMph = DEFAULT_RACE_SPEED_MPH;
 
-function raceSpeedMs() {
-  return raceSpeedMph * MPH_TO_MS;
+function raceSpeedMs(mph) {
+  return mph * MPH_TO_MS;
 }
 
 // Authentication State
@@ -234,7 +234,7 @@ function renderPerformanceCharts() {
   const graphH = h - padding.top - padding.bottom;
   
   const density = 1.225; // kg/m³
-  const vRace = raceSpeedMs();
+  const vRace = raceSpeedMs(raceSpeedMph);
   // Axis spans to the race speed with headroom, rounded up to a clean 5 m/s step
   const vMax = Math.max(20, Math.ceil((vRace * 1.5) / 5) * 5);
   const speeds = Array.from({ length: 11 }, (_, i) => (i * vMax) / 10);
@@ -1341,7 +1341,7 @@ async function uploadFile(file) {
 
 function updateRaceSpeedLabels() {
   const msDisplay = document.getElementById('race-speed-ms-display');
-  if (msDisplay) msDisplay.textContent = raceSpeedMs().toFixed(1);
+  if (msDisplay) msDisplay.textContent = raceSpeedMs(raceSpeedMph).toFixed(1);
 }
 
 // Results labels track the speed the run was actually solved at, which is not
