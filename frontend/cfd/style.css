@@ -19,21 +19,40 @@
   
   --border-color: rgba(0, 240, 255, 0.12);
   --border-glow: rgba(0, 240, 255, 0.2);
-  
+  /* Stronger, consistent seam color for structural boundaries (header,
+     panel titlebars, gutters) -- the plain --border-color above is too
+     faint against the near-black panel backgrounds to read as a division. */
+  --border-color-strong: rgba(0, 240, 255, 0.22);
+
   --success-color: #00e676;
   --success-glow: rgba(0, 230, 118, 0.2);
   --danger-color: #ff3d00;
   --danger-glow: rgba(255, 61, 0, 0.2);
   --warning-color: #ffb300;
-  
+
   --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
-  
+
   --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   --transition-fast: all 0.15s ease;
-  
-  --sidebar-width: 330px;
+
+  /* Workspace panel sizing -- input/results widths are live-updated (as
+     inline custom properties on :root) by the resize-gutter drag logic in
+     main.js and restored from localStorage on load. */
+  --input-panel-width: 330px;
+  --results-panel-width: 330px;
+  --panel-min-width: 260px;
+  --panel-max-width: 640px;
+  --display-min-width: 320px;
+  --gutter-width: 6px;
+  --stage-tabs-height: 44px;
+
+  /* Distinct panel backgrounds so header/Input/Display/Results read as
+     separate regions rather than one undifferentiated dark field. */
+  --bg-panel-input: rgba(18, 25, 42, 0.72);
+  --bg-panel-display: rgba(9, 13, 21, 0.92);
+  --bg-panel-results: rgba(21, 28, 46, 0.72);
 }
 
 * {
@@ -90,9 +109,87 @@ body {
   align-items: center;
   padding: 0 24px;
   background: rgba(10, 14, 23, 0.85);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color-strong);
   backdrop-filter: blur(10px);
   z-index: 100;
+}
+
+/* Stage Tab Bar (01-04), directly under the header */
+.stage-tabs {
+  height: var(--stage-tabs-height);
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 0 20px;
+  background: rgba(10, 14, 23, 0.85);
+  /* The underline now runs the full width of the tab bar instead of just
+     under the active tab -- each tab's own outline (below) sits flush on
+     top of it. */
+  border-bottom: 2px solid var(--accent-cyan);
+  z-index: 90;
+}
+
+.stage-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: none;
+  border: 1px solid var(--accent-cyan);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.stage-tab:hover:not(.disabled) {
+  color: var(--text-primary);
+}
+
+.stage-tab.active {
+  color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
+/* Breaks the tab bar's underline exactly under the active tab, so it reads
+   as connected to the bar rather than sitting on top of the line -- covers
+   the container's border-bottom with the same color that's behind it. */
+.stage-tab.active::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -2px;
+  height: 2px;
+  background: rgba(10, 14, 23, 0.85);
+}
+
+.stage-tab.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tab-step-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.15);
+}
+
+.stage-tab.active .tab-step-num {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: rgba(0, 240, 255, 0.4);
 }
 
 .brand {
@@ -210,26 +307,98 @@ body {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width);
-  height: calc(100vh - 70px);
+  grid-template-columns:
+    var(--input-panel-width)
+    var(--gutter-width)
+    minmax(var(--display-min-width), 1fr)
+    var(--gutter-width)
+    var(--results-panel-width);
+  height: calc(100vh - 70px - var(--stage-tabs-height));
   position: relative;
-  overflow: hidden;
+  /* No panel ever disappears: below the combined minimums the row scrolls
+     horizontally instead of hiding or squeezing a panel (replaces the old
+     "hide the results panel below 1100px" breakpoint). */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.sidebar {
-  background: var(--bg-secondary);
-  backdrop-filter: blur(16px);
-  border-right: 1px solid var(--border-color);
+.workspace-panel {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   z-index: 10;
 }
 
-.sidebar.stats-panel {
-  border-right: none;
-  border-left: 1px solid var(--border-color);
-  overflow-y: hidden;
+.panel-input,
+.panel-results {
+  min-width: var(--panel-min-width);
+  max-width: var(--panel-max-width);
+}
+
+.panel-display {
+  min-width: var(--display-min-width);
+}
+
+.panel-input { background: var(--bg-panel-input); backdrop-filter: blur(16px); }
+.panel-results { background: var(--bg-panel-results); backdrop-filter: blur(16px); }
+.panel-display { background: var(--bg-panel-display); }
+
+.panel-titlebar {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color-strong);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.panel-titlebar h2 {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Results panel titlebar also permanently hosts the active model name, so
+   it stays visible regardless of which stage tab is active. */
+.panel-results .panel-titlebar .model-info {
+  margin-left: auto;
+  min-width: 0;
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Resize gutters between Input/Display and Display/Results */
+.resize-gutter {
+  position: relative;
+  width: var(--gutter-width);
+  background: var(--border-color-strong);
+  cursor: col-resize;
+  z-index: 15;
+  flex-shrink: 0;
+}
+
+.resize-gutter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: -3px;
+}
+
+.resize-gutter:hover,
+.resize-gutter.dragging {
+  background: var(--accent-cyan);
 }
 
 .panel-section {
@@ -401,6 +570,36 @@ body {
   background: rgba(0, 240, 255, 0.08);
 }
 
+/* Primary action buttons (Check Geometry, Continue to Simulation, Run CFD
+   Simulation, ...) -- otherwise unstyled aside from per-instance layout, so
+   they rendered as bare native buttons. Matches the rounded, glowing-cyan
+   look already used for a selected .model-item. */
+.btn-primary {
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.08);
+  transition: var(--transition-smooth);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(0, 240, 255, 0.16);
+  border-color: rgba(0, 240, 255, 0.55);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.18);
+}
+
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .library-search {
   margin-bottom: 12px;
 }
@@ -517,38 +716,21 @@ body {
 }
 
 /* 3D Viewport styling */
-.viewport-area {
-  flex: 1;
-  background: #06090f;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  min-width: 0;
-}
-
-.viewport-header {
-  height: 56px;
-  background: rgba(10, 14, 23, 0.5);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 20px;
-  backdrop-filter: blur(8px);
-  z-index: 5;
-}
-
 .model-info {
   display: flex;
   align-items: center;
   gap: 12px;
+  overflow: hidden;
 }
 
 .model-info h3 {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .model-status-tag {
@@ -561,90 +743,37 @@ body {
   border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-/* Viewport Toolbar */
-/* Wraps the scrollable toolbar plus its two scroll-arrow buttons, which
-   overlay its left/right edges. Scrolling this toolbar horizontally is not
-   discoverable on its own (no visible scrollbar, no hint) -- without the
-   arrows, users have no way to know the centreline/outboard/pressure
-   buttons exist when they don't fit, since they're silently clipped
-   past the container edge with nothing to indicate more content. */
-.viewport-toolbar-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  flex: 1;
-}
-
-.viewport-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* The header's height is fixed, so on narrower screens (more control
-     groups than fit) this scrolls horizontally within the toolbar's own
-     row instead of silently clipping the rightmost buttons off-screen.
-     min-width: 0 overrides the flex item default of min-width: auto,
-     which otherwise lets this grow past its container instead of
-     triggering its own overflow-x scrollbar. */
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-}
-
-.viewport-toolbar > * {
   flex-shrink: 0;
 }
 
-/* Scroll-arrow buttons overlaid on the toolbar's edges -- shown by main.js
-   only when there is actually more content to scroll to in that direction. */
-.toolbar-scroll-btn {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 22px;
+/* Viewport Toolbar -- regrouped into labeled sections (Render / View /
+   Display / Overlays) that wrap onto a second row on narrow windows,
+   instead of the previous single-row-plus-scroll-arrows layout. Every
+   control keeps its existing id/data-* attribute, so button behavior is
+   unaffected -- only the markup they're grouped under changed. */
+.viewport-toolbar-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  row-gap: 8px;
+  padding: 8px 20px;
+  min-height: 56px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color-strong);
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+.toolbar-group {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-  color: var(--accent-cyan);
-  z-index: 2;
-  padding: 0;
+  gap: 6px;
 }
 
-.toolbar-scroll-btn.left {
-  left: 0;
-  background: linear-gradient(to right, rgba(10, 14, 23, 0.95) 40%, transparent);
-}
-
-.toolbar-scroll-btn.right {
-  right: 0;
-  background: linear-gradient(to left, rgba(10, 14, 23, 0.95) 40%, transparent);
-}
-
-/* The unconditional `display: flex` above is author-origin CSS, so it beats
-   the browser's default `[hidden] { display: none }` UA-stylesheet rule
-   regardless of selector specificity -- without this, setting .hidden in
-   JS has no visible effect and the button stays on screen. */
-.toolbar-scroll-btn[hidden] {
-  display: none;
-}
-
-/* Reserve room so a visible scroll-arrow never sits on top of the
-   button nearest that edge. */
-.viewport-toolbar-wrap:has(.toolbar-scroll-btn.left:not([hidden])) .viewport-toolbar {
-  padding-left: 20px;
-}
-
-.viewport-toolbar-wrap:has(.toolbar-scroll-btn.right:not([hidden])) .viewport-toolbar {
-  padding-right: 20px;
-}
-
-.control-group-label {
-  font-size: 10px;
+.toolbar-group-label {
+  font-size: 9px;
   text-transform: uppercase;
   color: var(--text-dark);
   font-weight: 700;
@@ -877,46 +1006,6 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Frontal Area Calculation Section */
-.frontal-area-box {
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.05), rgba(0, 240, 255, 0.05));
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 16px;
-}
-
-.frontal-area-box h3 {
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.area-note {
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-}
-
-.area-result {
-  text-align: center;
-  padding-bottom: 10px;
-}
-
-.area-result .value {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--accent-cyan);
-  text-shadow: 0 0 10px var(--accent-cyan-glow);
-}
-
-.area-result .unit {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-
 .select-field {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1071,16 +1160,6 @@ body {
   }
   50% {
     transform: translateY(-8px) rotate(3deg);
-  }
-}
-
-/* Responsive adjustment */
-@media (max-width: 1100px) {
-  .workspace {
-    grid-template-columns: 280px 1fr;
-  }
-  .sidebar.stats-panel {
-    display: none; /* Hide on smaller viewports, prioritize viewer & upload */
   }
 }
 
@@ -1256,128 +1335,47 @@ body {
   }
 }
 
-/* Workflow Accordion Cards */
+/* Input panel cards -- one per stage, shown/hidden by the stage tab bar.
+   Navigation between stages now lives in .stage-tabs; these are just the
+   input content for whichever stage is active (mirrors .stage-data-panel
+   below, which does the same job for the Results panel). */
 .workflow-card {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  display: flex;
+  display: none;
   flex-direction: column;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  position: relative;
+  padding: 15px 20px 20px 20px;
+  animation: dataPanelFadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.workflow-card::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: transparent;
-  transition: background-color 0.3s ease;
+.workflow-card.active {
+  display: flex;
 }
 
-.workflow-card.active::after {
-  background: var(--accent-cyan);
+.card-instruction {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.4;
 }
 
-.workflow-card.disabled {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-.workflow-card-header {
-  padding: 16px 20px;
+.import-options {
   display: flex;
   align-items: center;
-  cursor: pointer;
-  user-select: none;
-  background: transparent;
-  transition: background-color 0.2s ease;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  margin-bottom: 8px;
 }
 
-.workflow-card-header:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+.import-options--split {
+  justify-content: space-between;
 }
 
-.workflow-card-header h2 {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-  flex: 1;
-  letter-spacing: 0.5px;
-}
-
-.workflow-card-header .step-num {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.08);
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 240, 255, 0.15);
-  margin-right: 12px;
-  transition: all 0.3s ease;
-}
-
-.workflow-card.active .workflow-card-header .step-num {
-  background: rgba(0, 240, 255, 0.18);
-  border-color: rgba(0, 240, 255, 0.4);
-  box-shadow: 0 0 6px rgba(0, 240, 255, 0.2);
-}
-
-.workflow-card-header .accordion-icon {
-  width: 16px;
-  height: 16px;
-  position: relative;
-}
-
-.workflow-card-header .accordion-icon::before,
-.workflow-card-header .accordion-icon::after {
-  content: '';
-  background-color: var(--text-secondary);
-  position: absolute;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Accordion horizontal line */
-.workflow-card-header .accordion-icon::before {
-  width: 10px;
-  height: 2px;
-  top: 7px;
-  left: 3px;
-}
-
-/* Accordion vertical line */
-.workflow-card-header .accordion-icon::after {
-  width: 2px;
-  height: 10px;
-  top: 3px;
-  left: 7px;
-}
-
-/* Transform to minus when active */
-.workflow-card.active .workflow-card-header .accordion-icon::after {
-  transform: rotate(90deg);
-  opacity: 0;
-}
-
-.workflow-card-body {
-  max-height: 0;
-  opacity: 0;
-  padding: 0 20px;
-  overflow: hidden;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.25s ease,
-              padding 0.3s ease;
-}
-
-.workflow-card.active .workflow-card-body {
-  max-height: 500px;
-  opacity: 1;
-  padding: 15px 20px 20px 20px;
+.import-options--column {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 /* Stage-Specific Data Displays (Right Column) */

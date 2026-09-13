@@ -155,8 +155,17 @@ function switchStage(stageNum) {
   }
 
   activeStage = stageNum;
-  
-  // 1. Update left accordion cards styling
+
+  // 1. Update the stage tab bar (drives navigation between stages)
+  for (let i = 1; i <= 4; i++) {
+    const tabEl = document.getElementById(`tab-stage-${i}`);
+    if (tabEl) {
+      tabEl.classList.toggle('active', i === activeStage);
+      tabEl.classList.toggle('disabled', !unlockedStages.has(i));
+    }
+  }
+
+  // 2. Update the Input panel's stage cards (which one is visible)
   for (let i = 1; i <= 4; i++) {
     const cardEl = document.getElementById(`card-stage-${i}`);
     if (cardEl) {
@@ -165,7 +174,7 @@ function switchStage(stageNum) {
       } else {
         cardEl.classList.remove('active');
       }
-      
+
       // Update disabled state based on unlock status
       if (unlockedStages.has(i)) {
         cardEl.classList.remove('disabled');
@@ -174,8 +183,8 @@ function switchStage(stageNum) {
       }
     }
   }
-  
-  // 2. Update right-side stage data panels visibility
+
+  // 3. Update right-side stage data panels visibility
   for (let i = 1; i <= 4; i++) {
     const panelEl = document.getElementById(`data-stage-${i}`);
     if (panelEl) {
@@ -189,7 +198,7 @@ function switchStage(stageNum) {
     }
   }
   
-  // 3. Stage 4's charts live in the right-hand summary panel, which was
+  // 4. Stage 4's charts live in the right-hand summary panel, which was
   // display:none until the loop above -- SVG sizing measures clientWidth, so
   // render only once the panel is visible.
   if (activeStage === 4) {
@@ -204,6 +213,10 @@ function unlockStage(stageNum) {
   if (cardEl) {
     cardEl.classList.remove('disabled');
   }
+  const tabEl = document.getElementById(`tab-stage-${stageNum}`);
+  if (tabEl) {
+    tabEl.classList.remove('disabled');
+  }
 }
 window.unlockStage = unlockStage;
 
@@ -212,6 +225,10 @@ function lockStage(stageNum) {
   const cardEl = document.getElementById(`card-stage-${stageNum}`);
   if (cardEl) {
     cardEl.classList.add('disabled');
+  }
+  const tabEl = document.getElementById(`tab-stage-${stageNum}`);
+  if (tabEl) {
+    tabEl.classList.add('disabled');
   }
 }
 window.lockStage = lockStage;
@@ -544,6 +561,81 @@ function createCustomAxesHelper(length = 200, thickness = 3.5) {
 }
 
 // --- Three.js Scene Setup ---
+// --- Resizable Input/Results panels ---
+const PANEL_WIDTH_STORAGE_KEY = 'caucsim_panel_widths';
+const PANEL_WIDTH_MIN = 260;
+const PANEL_WIDTH_MAX = 640;
+const PANEL_WIDTH_DEFAULT = 330;
+
+function clampPanelWidth(value, fallback) {
+  return (typeof value === 'number' && isFinite(value))
+    ? Math.min(PANEL_WIDTH_MAX, Math.max(PANEL_WIDTH_MIN, value))
+    : fallback;
+}
+
+function loadPanelWidths() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PANEL_WIDTH_STORAGE_KEY) || '{}');
+    return {
+      input: clampPanelWidth(raw.input, PANEL_WIDTH_DEFAULT),
+      results: clampPanelWidth(raw.results, PANEL_WIDTH_DEFAULT)
+    };
+  } catch {
+    return { input: PANEL_WIDTH_DEFAULT, results: PANEL_WIDTH_DEFAULT };
+  }
+}
+
+function savePanelWidths(widths) {
+  localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, JSON.stringify(widths));
+}
+
+function applyPanelWidths(widths) {
+  document.documentElement.style.setProperty('--input-panel-width', widths.input + 'px');
+  document.documentElement.style.setProperty('--results-panel-width', widths.results + 'px');
+}
+
+// Wires up pointer-drag resizing for a single gutter. `sign` accounts for
+// which edge of the panel the gutter sits on: dragging the Input/Display
+// gutter right (+dx) widens the Input panel (its right edge moves), while
+// dragging the Display/Results gutter right (+dx) narrows the Results panel
+// (its *left* edge moves, so the width shrinks) -- hence the opposite sign.
+function setupResizeGutter(gutterId, widthKey, sign, widths) {
+  const gutterEl = document.getElementById(gutterId);
+  if (!gutterEl) return;
+  let startX = 0;
+  let startWidth = 0;
+
+  gutterEl.addEventListener('pointerdown', (e) => {
+    gutterEl.setPointerCapture(e.pointerId);
+    gutterEl.classList.add('dragging');
+    startX = e.clientX;
+    startWidth = widths[widthKey];
+  });
+  gutterEl.addEventListener('pointermove', (e) => {
+    if (!gutterEl.hasPointerCapture(e.pointerId)) return;
+    const delta = (e.clientX - startX) * sign;
+    widths[widthKey] = clampPanelWidth(startWidth + delta, startWidth);
+    applyPanelWidths(widths);
+  });
+  gutterEl.addEventListener('pointerup', (e) => {
+    if (gutterEl.hasPointerCapture(e.pointerId)) {
+      gutterEl.releasePointerCapture(e.pointerId);
+    }
+    gutterEl.classList.remove('dragging');
+    savePanelWidths(widths);
+  });
+}
+
+// Applies persisted widths and wires up the drag handles. Must run before
+// initThree(), since initThree() reads the viewport container's clientWidth/
+// Height synchronously to size the camera/renderer for the first frame.
+function initResizablePanels() {
+  const widths = loadPanelWidths();
+  applyPanelWidths(widths);
+  setupResizeGutter('gutter-input-display', 'input', 1, widths);
+  setupResizeGutter('gutter-display-results', 'results', -1, widths);
+}
+
 function initThree() {
   const width = viewportContainer.clientWidth;
   const height = viewportContainer.clientHeight;
@@ -619,6 +711,10 @@ function initThree() {
 
   // Handle Resize
   window.addEventListener('resize', onWindowResize);
+  // A window resize event doesn't fire when only the grid columns change
+  // (e.g. dragging a resize-gutter, or the workspace scrolling horizontally
+  // at a narrow width) -- watch the container's own box directly too.
+  new ResizeObserver(onWindowResize).observe(viewportContainer);
 
   // Animation Loop
   animate();
@@ -641,6 +737,14 @@ function onWindowResize() {
 // --- STL Loading & Calculations ---
 function loadSTL(originalName, viewUrl, fileKey) {
   if (fileKey !== activeFileKey) {
+    // Swapping to a different file discards any CFD run tied to the current
+    // one. Historical-run navigation (viewHistoricalJob/returnToActiveRun)
+    // also swaps files through here but is intentionally silent — it isn't
+    // discarding anything, just changing which run is being reviewed.
+    if (!viewingHistoryReadOnly && activeJobId) {
+      const proceed = confirm('Loading a different CAD model will discard the current CFD run and its results. Continue?');
+      if (!proceed) return;
+    }
     clearCfdRun();
   }
 
@@ -674,11 +778,13 @@ function loadSTL(originalName, viewUrl, fileKey) {
   if (detailsLoaded) detailsLoaded.style.display = 'block';
   if (metaFilename) metaFilename.textContent = originalName;
 
-  // Unlock Stage 2 but stay on Stage 1
-  unlockStage(2);
+  // Stage 2 / Check Geometry aren't meaningful until this model has actually
+  // finished loading -- re-lock (a previously-loaded file may have unlocked
+  // it already) and only unlock again once loading succeeds, below.
+  lockStage(2);
   const btnAnalyseGeometry = document.getElementById('btn-analyse-geometry');
   if (btnAnalyseGeometry) {
-    btnAnalyseGeometry.disabled = false;
+    btnAnalyseGeometry.disabled = true;
   }
   switchStage(1);
 
@@ -805,6 +911,13 @@ function loadSTL(originalName, viewUrl, fileKey) {
         metaStatusDot.style.filter = 'drop-shadow(0 0 3px var(--accent-cyan))';
       }
       if (metaStatusText) metaStatusText.textContent = 'Loaded & Ready';
+
+      // The model has actually finished loading now -- Check Geometry is
+      // meaningful and Stage 2 can be reached.
+      unlockStage(2);
+      if (btnAnalyseGeometry) {
+        btnAnalyseGeometry.disabled = false;
+      }
     },
     (xhr) => {
       // Progress handler
@@ -1230,7 +1343,11 @@ function renderLibraryList(files, selectFileKey = null) {
     const deleteBtn = li.querySelector('.btn-delete');
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (confirm(`Are you sure you want to delete ${file.originalName}?`)) {
+      const isActiveWithRun = activeFileKey === file.fileKey && !!activeJobId;
+      const confirmMsg = isActiveWithRun
+        ? `Delete ${file.originalName}? This will also discard its current CFD run and results.`
+        : `Are you sure you want to delete ${file.originalName}?`;
+      if (confirm(confirmMsg)) {
         try {
           // Send key directly. Express wildcard will catch uploads/... path.
           const deleteResponse = await fetch(`/api/files/${file.fileKey}`, {
@@ -1361,7 +1478,55 @@ function updateResultsSpeedLabels(mph) {
 }
 
 // --- Event Listeners and Triggers ---
+// Run CFD Simulation requires geometry to already be loaded, no run already
+// in flight, and a run name + purpose/notes -- re-evaluated whenever those
+// two inputs change, and called instead of a bare `disabled = false` from
+// every other place that used to just re-enable the button unconditionally
+// (after a failed launch, a completed/failed run, or Clear Run) so none of
+// them can leave it enabled with the fields still blank.
+function updateRunCfdButtonState() {
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (!btnRunCfd) return;
+  const runNameInput = document.getElementById('run-name-input');
+  const runPurposeInput = document.getElementById('run-purpose-input');
+  const hasRunName = !!(runNameInput && runNameInput.value.trim());
+  const hasPurpose = !!(runPurposeInput && runPurposeInput.value.trim());
+  btnRunCfd.disabled = !activeFileKey || !!activeJobId || !hasRunName || !hasPurpose;
+}
+
+// While a run is in flight the button is disabled, so its label doubles as a
+// second, at-a-glance copy of the live status (mirrors #cfd-status-badge)
+// rather than a fixed "Launching Droplet..." caption that never changes.
+function setRunCfdButtonSpinnerLabel(label) {
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (!btnRunCfd) return;
+  btnRunCfd.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px; display: inline-block; vertical-align: middle; animation: spin 1s linear infinite;">
+      <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.49 8.49l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.49-8.49l2.83-2.83"/>
+    </svg>
+    ${label}
+  `;
+}
+
 function bindEvents() {
+  // Stage tab bar -- navigation now lives here instead of the old
+  // clickable workflow-card headers.
+  document.querySelectorAll('.stage-tab').forEach(tabEl => {
+    tabEl.addEventListener('click', () => {
+      switchStage(parseInt(tabEl.dataset.stage, 10));
+    });
+  });
+
+  const runNameInput = document.getElementById('run-name-input');
+  if (runNameInput) {
+    runNameInput.addEventListener('input', updateRunCfdButtonState);
+  }
+  const runPurposeInput = document.getElementById('run-purpose-input');
+  if (runPurposeInput) {
+    runPurposeInput.addEventListener('input', updateRunCfdButtonState);
+  }
+
   const raceSpeedInput = document.getElementById('race-speed-input');
   if (raceSpeedInput) {
     raceSpeedInput.value = raceSpeedMph;
@@ -1493,34 +1658,6 @@ function bindEvents() {
   togglePressureBtn.addEventListener('click', () => {
     setPressureVisible(!pressureToggleActive);
   });
-
-  // The toolbar scrolls horizontally when its control groups don't all fit
-  // (see .viewport-toolbar in style.css), but a bare overflow-x scrollbar
-  // gives no hint that the centreline/outboard/pressure buttons exist off
-  // to the right -- these arrows make that discoverable and clickable.
-  const viewportToolbar = document.getElementById('viewport-toolbar');
-  const toolbarScrollLeftBtn = document.getElementById('toolbar-scroll-left');
-  const toolbarScrollRightBtn = document.getElementById('toolbar-scroll-right');
-  if (viewportToolbar && toolbarScrollLeftBtn && toolbarScrollRightBtn) {
-    const updateToolbarScrollButtons = () => {
-      const maxScrollLeft = viewportToolbar.scrollWidth - viewportToolbar.clientWidth;
-      toolbarScrollLeftBtn.hidden = viewportToolbar.scrollLeft <= 1;
-      toolbarScrollRightBtn.hidden = viewportToolbar.scrollLeft >= maxScrollLeft - 1;
-    };
-    toolbarScrollLeftBtn.addEventListener('click', () => {
-      viewportToolbar.scrollBy({ left: -120, behavior: 'smooth' });
-    });
-    toolbarScrollRightBtn.addEventListener('click', () => {
-      viewportToolbar.scrollBy({ left: 120, behavior: 'smooth' });
-    });
-    viewportToolbar.addEventListener('scroll', updateToolbarScrollButtons);
-    // The toolbar's available width also changes without a window resize --
-    // e.g. the model title (its flex sibling) grows during "Loading 3D
-    // mesh... (name.stl)" -- so watch the toolbar's own box, not just the
-    // window.
-    new ResizeObserver(updateToolbarScrollButtons).observe(viewportToolbar);
-    updateToolbarScrollButtons();
-  }
 
   // Unit Mode Selector change
   const unitSelect = document.getElementById('unit-select');
@@ -1980,11 +2117,6 @@ function showCfdMonitor(show) {
   if (emptyEl) emptyEl.style.display = show ? 'none' : 'flex';
 }
 
-function showCfdResults(show) {
-  const el = document.getElementById('cfd-results');
-  if (el) el.style.display = show ? 'block' : 'none';
-}
-
 async function openHistoryModal() {
   historyModal.style.display = 'flex';
   historyList.innerHTML = '';
@@ -2108,7 +2240,6 @@ async function viewHistoricalJob(jobId) {
       displayFailedCfdState(job);
     } else {
       showCfdMonitor(true);
-      showCfdResults(false);
     }
 
     const banner = document.getElementById('history-readonly-banner');
@@ -2171,17 +2302,10 @@ async function startCfdSimulation() {
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (!btnRunCfd) return;
   btnRunCfd.disabled = true;
-  btnRunCfd.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px; display: inline-block; vertical-align: middle; animation: spin 1s linear infinite;">
-      <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.49 8.49l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.49-8.49l2.83-2.83"/>
-    </svg>
-    Launching Droplet...
-  `;
+  setRunCfdButtonSpinnerLabel('Preparing');
   
   // Provide an immediate visual update in the Simulation Logs & Progress section
   showCfdMonitor(true);
-  showCfdResults(false);
 
   const statusBadge = document.getElementById('cfd-status-badge');
   const progressFill = document.getElementById('cfd-progress-fill');
@@ -2248,7 +2372,6 @@ async function startCfdSimulation() {
       consoleEl.textContent = 'Launching droplet and configuring OpenFOAM environment...\n';
     }
     showCfdMonitor(true);
-    showCfdResults(false);
     updateCfdMonitorState(job);
     
     // Start polling
@@ -2279,7 +2402,7 @@ async function startCfdSimulation() {
       engineStatusVal.textContent = 'Standby';
     }
 
-    btnRunCfd.disabled = false;
+    updateRunCfdButtonState();
     btnRunCfd.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
         <path d="M5 3l14 9-14 9V3z"/>
@@ -2500,7 +2623,15 @@ function updateCfdMonitorState(job) {
   
   statusBadge.textContent = stageName;
   progressFill.style.width = `${percent}%`;
-  
+
+  // Mirror the live status onto the Run button too while it's genuinely
+  // in flight -- once the job reaches a terminal state, displayCfdResults /
+  // displayFailedCfdState own the button's label (and re-enable it) instead.
+  const btnRunCfd = document.getElementById('btn-run-cfd');
+  if (btnRunCfd && btnRunCfd.disabled && job.status !== 'completed' && job.status !== 'failed') {
+    setRunCfdButtonSpinnerLabel(stageName);
+  }
+
   if (job.status === 'failed') {
     statusBadge.textContent = 'Failed';
     statusBadge.style.background = 'rgba(255, 61, 0, 0.1)';
@@ -2827,7 +2958,6 @@ function renderResultBanner(m) {
 
 function displayCfdResults(job) {
   showCfdMonitor(false);
-  showCfdResults(true);
   showResultsSummary(true);
 
   if (job && job.jobId) {
@@ -2881,7 +3011,7 @@ function displayCfdResults(job) {
   
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (btnRunCfd) {
-    btnRunCfd.disabled = false;
+    updateRunCfdButtonState();
     btnRunCfd.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
         <path d="M5 3l14 9-14 9V3z"/>
@@ -2893,7 +3023,6 @@ function displayCfdResults(job) {
 
 function displayFailedCfdState(job) {
   showCfdMonitor(true);
-  showCfdResults(false);
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
     consoleEl.textContent += `\n\n[ERROR] CFD Simulation failed: ${job.error || 'Unknown Error'}\n`;
@@ -2902,7 +3031,7 @@ function displayFailedCfdState(job) {
   
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (btnRunCfd) {
-    btnRunCfd.disabled = false;
+    updateRunCfdButtonState();
     btnRunCfd.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
         <path d="M5 3l14 9-14 9V3z"/>
@@ -2917,7 +3046,6 @@ function clearCfdRun() {
   activeJobId = null;
   if (!viewingHistoryReadOnly) localStorage.removeItem('caucsim_active_job_id');
   showCfdMonitor(false);
-  showCfdResults(false);
   showResultsSummary(false);
   updateEngineStatus(null);
   
@@ -2978,7 +3106,7 @@ function clearCfdRun() {
   
   const btnRunCfd = document.getElementById('btn-run-cfd');
   if (btnRunCfd) {
-    btnRunCfd.disabled = !activeFileKey;
+    updateRunCfdButtonState();
     btnRunCfd.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 8px;">
         <path d="M5 3l14 9-14 9V3z"/>
@@ -3033,7 +3161,7 @@ function initCfdRunner() {
   
   if (btnRunCfd) {
     btnRunCfd.addEventListener('click', startCfdSimulation);
-    btnRunCfd.disabled = !activeFileKey;
+    updateRunCfdButtonState();
   }
   
   if (btnToggleConsole) {
@@ -3164,7 +3292,25 @@ function initCfdRunner() {
       headers: {
         'Authorization': `Bearer ${idToken || ''}`
       }
-    }).then(res => res.json()).then(job => {
+    }).then(res => res.json()).then(async (job) => {
+      // activeJobId survives a reload via localStorage, but activeFileKey
+      // does not -- without this, restoring a completed/running job here
+      // shows its results/monitor over a viewport that never loaded the
+      // model it belongs to. Mirrors viewHistoricalJob's approach: loadSTL
+      // (via fetchLibrary) calls clearCfdRun on the fileKey change, which
+      // nulls activeJobId and would pop the "discard this run?" prompt for
+      // what isn't really a swap, so viewingHistoryReadOnly suppresses both
+      // while this runs, and activeJobId is restored once the geometry has
+      // loaded (awaited so it -- and loadSTL's own switchStage(1) -- finish
+      // before the status-based switchStage below runs).
+      if (job.fileKey && job.fileKey !== activeFileKey) {
+        const wasReadOnly = viewingHistoryReadOnly;
+        viewingHistoryReadOnly = true;
+        await fetchLibrary(job.fileKey);
+        viewingHistoryReadOnly = wasReadOnly;
+        activeJobId = job.jobId;
+      }
+
       if (job.status === 'completed') {
         unlockStage(4);
         displayCfdResults(job);
@@ -3195,14 +3341,12 @@ function initCfdRunner() {
 const originalComputeStats = computeStats;
 computeStats = function(geometry, size) {
   originalComputeStats(geometry, size);
-  const btnRunCfd = document.getElementById('btn-run-cfd');
-  if (btnRunCfd && !activeJobId) {
-    btnRunCfd.disabled = false;
-  }
+  updateRunCfdButtonState();
 };
 
 // --- App Bootstrap ---
 function bootstrapApp() {
+  initResizablePanels();
   initThree();
   bindEvents();
   checkStorageStatus();

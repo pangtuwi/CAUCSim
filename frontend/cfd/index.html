@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  
+
   <!-- Import map for Three.js ES module mapping -->
   <script type="importmap">
     {
@@ -35,10 +35,10 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.53</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.54</span></p>
         </div>
       </div>
-      
+
       <div class="system-status">
         <div class="status-indicator" id="storage-status">
           <span class="dot"></span>
@@ -54,19 +54,35 @@
       <button id="btn-logout" class="btn-secondary" style="display: none; padding: 6px 12px; font-size: 11px; height: auto; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Log Out</button>
     </header>
 
+    <!-- Stage Tab Bar -->
+    <nav class="stage-tabs" id="stage-tabs">
+      <button class="stage-tab active" id="tab-stage-1" data-stage="1">
+        <span class="tab-step-num">01</span>
+        <span class="tab-title">CAD Model Selection</span>
+      </button>
+      <button class="stage-tab disabled" id="tab-stage-2" data-stage="2">
+        <span class="tab-step-num">02</span>
+        <span class="tab-title">Geometry Check</span>
+      </button>
+      <button class="stage-tab disabled" id="tab-stage-3" data-stage="3">
+        <span class="tab-step-num">03</span>
+        <span class="tab-title">CFD Simulation</span>
+      </button>
+      <button class="stage-tab disabled" id="tab-stage-4" data-stage="4">
+        <span class="tab-step-num">04</span>
+        <span class="tab-title">Results Analysis</span>
+      </button>
+    </nav>
+
     <!-- Main Workspace -->
     <main class="workspace">
-      <!-- Left Column: Workflow Actions -->
-      <aside class="sidebar control-panel">
-        <!-- Stage 1 Card: Select CAD Model -->
-        <div class="workflow-card active" id="card-stage-1">
-          <div class="workflow-card-header" onclick="switchStage(1)">
-            <span class="step-num">01</span>
-            <h2>CAD Model Selection</h2>
-            <span class="accordion-icon"></span>
-          </div>
-          <div class="workflow-card-body">
-            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+      <!-- Left Column: Input -->
+      <aside class="workspace-panel panel-input">
+        <div class="panel-titlebar"><h2>Input</h2></div>
+        <div class="panel-body">
+          <!-- Stage 1 Card: Select CAD Model -->
+          <div class="workflow-card active" id="card-stage-1">
+            <p class="card-instruction">
               Pick a CAD model from the list, or upload a new one below, then ensure units are correct.
             </p>
             <div class="model-list-wrapper" style="max-height: 180px; overflow-y: auto;">
@@ -76,7 +92,7 @@
               </ul>
             </div>
 
-            <div class="import-options" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options import-options--split">
               <label for="unit-select" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Model Units:</label>
               <select id="unit-select" class="select-field" style="flex: 1; min-width: 0; font-size: 10px;">
                 <option value="m" selected>Meters (m)</option>
@@ -110,53 +126,42 @@
             </div>
 
             <button class="btn-primary" id="btn-analyse-geometry" disabled style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px; margin-top: 15px;">
-              Check Geometry
-            </button>
-          </div>
-        </div>
-
-        <!-- Stage 2 Card: Check Geometry -->
-        <div class="workflow-card disabled" id="card-stage-2">
-          <div class="workflow-card-header" onclick="switchStage(2)">
-            <span class="step-num">02</span>
-            <h2>Geometry Check</h2>
-            <span class="accordion-icon"></span>
-          </div>
-          <div class="workflow-card-body">
-            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-              Review model dimensions and verify regulations checklist on the right.
-            </p>
-            <button class="btn-primary" id="btn-continue-to-cfd" style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px; margin-top: 15px;">
-              Continue to Simulation
+              Continue to Geometry Check
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-left: 8px;">
                 <path d="M5 12h14M13 6l6 6-6 6"/>
               </svg>
             </button>
           </div>
-        </div>
 
-        <!-- Stage 3 Card: Run CFD  Simulation -->
-        <div class="workflow-card disabled" id="card-stage-3">
-          <div class="workflow-card-header" onclick="switchStage(3)">
-            <span class="step-num">03</span>
-            <h2>CFD Simulation</h2>
-            <span class="accordion-icon"></span>
+          <!-- Stage 2 Card: Check Geometry -->
+          <div class="workflow-card disabled" id="card-stage-2">
+            <p class="card-instruction">
+              Review model dimensions and verify regulations checklist on the right.
+            </p>
+            <button class="btn-primary" id="btn-continue-to-cfd" style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px; margin-top: 15px;">
+              Continue to CFD Simulation
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-left: 8px;">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            </button>
           </div>
-          <div class="workflow-card-body">
-            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+
+          <!-- Stage 3 Card: Run CFD  Simulation -->
+          <div class="workflow-card disabled" id="card-stage-3">
+            <p class="card-instruction">
               Run a steady-state 3D OpenFOAM simulation of the design at the race speed set below.
             </p>
-            <div class="import-options" style="margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options import-options--column">
               <label for="run-name-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Run name:</label>
               <input type="text" id="run-name-input" maxlength="120" placeholder="e.g. Baseline aero check" style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;">
             </div>
 
-            <div class="import-options" style="margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options import-options--column">
               <label for="run-purpose-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Purpose / notes:</label>
-              <textarea id="run-purpose-input" maxlength="1000" rows="2" placeholder="What are you testing?" style="width: 100%; resize: vertical; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;"></textarea>
+              <textarea id="run-purpose-input" maxlength="1000" rows="6" placeholder="What are you testing?" style="width: 100%; resize: vertical; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;"></textarea>
             </div>
 
-            <div class="import-options" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options import-options--split">
               <label for="race-speed-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Race Speed:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" id="race-speed-input" value="30" min="1" max="100" step="0.5" style="width: 55px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 5px 6px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; text-align: right;">
@@ -164,7 +169,7 @@
               </div>
             </div>
 
-            <div class="import-options" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options import-options--split">
               <label for="wheelbase-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Axle-to-axle distance. Used as the reference length for the pitching-moment coefficient.">Wheelbase:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" id="wheelbase-input" value="" min="0.1" max="10" step="0.01" style="width: 55px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 5px 6px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; text-align: right;">
@@ -172,7 +177,7 @@
               </div>
             </div>
 
-            <div class="import-options" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03);">
+            <div class="import-options import-options--split">
               <label for="fast-check-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Coarse mesh and 50 solver steps. Confirms the model runs, but the coefficients are not accurate.">Fast check:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="checkbox" id="fast-check-input" style="width: 14px; height: 14px; accent-color: var(--accent-cyan); cursor: pointer;">
@@ -186,17 +191,10 @@
               Run CFD Simulation
             </button>
           </div>
-        </div>
 
-        <!-- Stage 4 Card: Analyse Results -->
-        <div class="workflow-card disabled" id="card-stage-4">
-          <div class="workflow-card-header" onclick="switchStage(4)">
-            <span class="step-num">04</span>
-            <h2>Results Analysis</h2>
-            <span class="accordion-icon"></span>
-          </div>
-          <div class="workflow-card-body">
-            <p class="card-instruction" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+          <!-- Stage 4 Card: Analyse Results -->
+          <div class="workflow-card disabled" id="card-stage-4">
+            <p class="card-instruction">
               Aerodynamic metrics and forces are ready. Review performance charts and download raw case files.
             </p>
             <div class="cfd-actions" style="display: flex; gap: 8px; flex-direction: column;">
@@ -232,40 +230,39 @@
         </div>
       </aside>
 
-      <!-- Center Column: 3D Viewport -->
-      <section class="viewport-area">
+      <div class="resize-gutter" id="gutter-input-display" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize Input panel"></div>
+
+      <!-- Center Column: Display -->
+      <section class="workspace-panel panel-display">
+        <div class="panel-titlebar"><h2>View</h2></div>
         <!-- 3D CAD Viewport Container (always visible; streamlines render on the model here) -->
-        <div id="cad-viewport-container" style="display: flex; flex-direction: column; height: 100%; width: 100%;">
-          <div class="viewport-header">
-            <div class="model-info">
-              <h3 id="active-model-title">No Geometry Loaded</h3>
-              <span class="model-status-tag" id="active-model-status" style="display: none;">Active</span>
-            </div>
-            
-            <div class="viewport-toolbar-wrap">
-            <button class="toolbar-scroll-btn left" id="toolbar-scroll-left" title="Scroll toolbar left" hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <div class="viewport-toolbar" id="viewport-toolbar">
-              <div class="control-group-label">|</div>
+        <div id="cad-viewport-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%;">
+          <div class="viewport-toolbar-groups" id="viewport-toolbar">
+            <div class="toolbar-group">
+              <span class="toolbar-group-label">Render</span>
               <div class="control-group">
                 <button class="btn-toggle active" data-render-mode="shaded" title="Shaded Solid">Solid</button>
                 <button class="btn-toggle" data-render-mode="wireframe" title="Wireframe Mesh">Wire</button>
                 <button class="btn-toggle" data-render-mode="points" title="Point Cloud">Points</button>
               </div>
-              
-              <div class="toolbar-divider"></div>
-              
-              <div class="control-group-label">|</div>
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <div class="toolbar-group">
+              <span class="toolbar-group-label">View</span>
               <div class="control-group">
                 <button class="btn-action" data-view="iso">ISO</button>
                 <button class="btn-action" data-view="top">TOP</button>
                 <button class="btn-action" data-view="front">FRONT</button>
                 <button class="btn-action" data-view="side">SIDE</button>
               </div>
+            </div>
 
-              <div class="control-group-label">|</div>
+            <div class="toolbar-divider"></div>
 
+            <div class="toolbar-group">
+              <span class="toolbar-group-label">Display</span>
               <div class="control-group">
                 <button class="btn-toggle-icon active" id="toggle-grid" title="Toggle Ground Grid">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -278,9 +275,12 @@
                   </svg>
                 </button>
               </div>
+            </div>
 
-              <div class="control-group-label">|</div>
+            <div class="toolbar-divider"></div>
 
+            <div class="toolbar-group">
+              <span class="toolbar-group-label">Overlays</span>
               <div class="control-group">
                 <button class="btn-toggle-icon" id="toggle-streamlines-centreline" title="Toggle Centreline Streamlines" disabled>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -305,10 +305,6 @@
                 </button>
               </div>
             </div>
-            <button class="toolbar-scroll-btn right" id="toolbar-scroll-right" title="Scroll toolbar right" hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-            </div>
 
             <div class="viewport-legend" id="pressure-legend" style="display: none;">
               <span class="viewport-legend-label" id="pressure-legend-min">-1.00</span>
@@ -325,7 +321,7 @@
               </svg>
               <p>Upload or select an STL file to render the 3D geometry</p>
             </div>
-            
+
             <div class="dimension-labels-container" id="dimension-labels" style="display: none;">
               <div class="dim-label length-label">L: <span id="dim-len">-</span> mm</div>
               <div class="dim-label width-label">W: <span id="dim-wid">-</span> mm</div>
@@ -336,14 +332,25 @@
 
       </section>
 
-      <!-- Right Column: Dynamic Stage Data Panels -->
-      <aside class="sidebar stats-panel">
+      <div class="resize-gutter" id="gutter-display-results" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize Results panel"></div>
+
+      <!-- Right Column: Results -->
+      <aside class="workspace-panel panel-results">
+        <div class="panel-titlebar">
+          <h2>Results</h2>
+          <!-- active-model-title/status are still updated through the load
+               lifecycle (js/main.js) but no longer shown here -- the file
+               name/status are already shown in the Stage 1 details below,
+               so surfacing them here too was redundant. -->
+          <div class="model-info" style="display: none;">
+            <h3 id="active-model-title">No Geometry Loaded</h3>
+            <span class="model-status-tag" id="active-model-status" style="display: none;">Active</span>
+          </div>
+        </div>
+        <div class="panel-body">
         <!-- Stage 1 Data: Import Details -->
         <div class="stage-data-panel active" id="data-stage-1" style="height: 100%; display: flex; flex-direction: column;">
           <div class="panel-section" style="border-bottom: none; display: flex; flex-direction: column; flex: 1;">
-            <div class="section-header">
-              <h2>Active CAD Model Details</h2>
-            </div>
             <div class="stage-data-content" id="import-details-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; color: var(--text-secondary); padding: 40px 20px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
                 <path d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
@@ -400,15 +407,16 @@
         <div class="stage-data-panel" id="data-stage-2" style="display: none; height: 100%; overflow-y: auto;">
           <section class="panel-section stats-section">
             <div class="section-header">
-              <h2>Aerodynamics</h2>
+              <h2>Aerodynamic Frontal Area</h2>
             </div>
-            
-            <div class="frontal-area-box" style="background: rgba(0, 240, 255, 0.02); border: 1px solid rgba(0, 240, 255, 0.08); border-radius: 8px; padding: 12px;">
-              <h3 style="font-size: 11px; color: var(--accent-cyan); text-transform: uppercase; margin: 0 0 4px 0; letter-spacing: 0.5px;">Aerodynamic Frontal Area</h3>
-              <p class="area-note" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 8px 0;">Calculated projected area along flow direction (Y-Z plane)</p>
-              <div class="area-result" style="display: flex; align-items: baseline; gap: 4px;">
-                <span class="value" id="stat-frontal-area" style="font-size: 22px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono);">-</span>
-                <span class="unit" style="font-size: 12px; color: var(--text-secondary);">m²</span>
+
+            <div class="reg-checklist">
+              <div class="reg-item" id="frontal-area-item">
+                <div class="reg-indicator"></div>
+                <div class="reg-details">
+                  <span class="name">Calculated projected area along flow direction (Y-Z plane)</span>
+                  <span class="value"><span id="stat-frontal-area">-</span> m²</span>
+                </div>
               </div>
             </div>
           </section>
@@ -425,7 +433,7 @@
                   <span class="value" id="reg-len-val">-</span>
                 </div>
               </div>
-              
+
               <div class="reg-item" id="reg-wid">
                 <div class="reg-indicator"></div>
                 <div class="reg-details">
@@ -482,7 +490,7 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="reg-summary-box" id="reg-summary" style="margin-top: 12px; font-size: 10px; padding: 10px; border-radius: 6px; text-align: center; font-weight: 500;">
               No geometry loaded
             </div>
@@ -492,10 +500,6 @@
         <!-- Stage 3 Data: CFD Progress & Logs -->
         <div class="stage-data-panel" id="data-stage-3" style="display: none; height: 100%; max-height: 100%; overflow: hidden;">
           <section class="panel-section" style="height: 100%; max-height: 100%; display: flex; flex-direction: column; border-bottom: none; overflow: hidden;">
-            <div class="section-header">
-              <h2>Simulation Status</h2>
-            </div>
-            
             <div class="stage-data-content" id="cfd-monitor-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; color: var(--text-secondary); padding: 40px 20px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
@@ -506,10 +510,10 @@
 
             <div class="cfd-monitor" id="cfd-monitor" style="display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
               <div class="monitor-status-row" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;">
-                <span class="monitor-status-label" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase;">Status:</span>
+                <span class="monitor-status-label" style="font-size: 11px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase;">Simulation Status:</span>
                 <span class="status-badge standby" id="cfd-status-badge" style="font-size: 11px; font-weight: 600; background: rgba(255, 170, 0, 0.1); border: 1px solid #ffaa00; color: #ffaa00; padding: 2px 8px; border-radius: 12px;">Ready to Run</span>
               </div>
-              
+
               <div class="progress-bar-wrapper" style="margin-top: 12px; background: rgba(255, 255, 255, 0.05); height: 6px; border-radius: 3px; overflow: hidden; flex-shrink: 0;">
                 <div class="progress-fill" id="cfd-progress-fill" style="width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple)); height: 100%; transition: width 0.3s ease;"></div>
               </div>
@@ -618,10 +622,11 @@
             </div>
           </section>
         </div>
+        </div>
       </aside>
     </main>
   </div>
-  
+
   <!-- Authentication Modal Overlay -->
   <div id="auth-modal" class="auth-overlay" style="display: none;">
     <div class="auth-modal-content">
@@ -630,7 +635,7 @@
         <h2>Secure Sign In</h2>
         <p>CAUCSim F24 CFD Platform</p>
       </div>
-      
+
       <form id="auth-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
         <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: left;">
           <label for="auth-email" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Email Address</label>
@@ -681,11 +686,11 @@
             <input type="password" id="auth-new-password" placeholder="Min 8 characters" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;">
           </div>
         </div>
-        
+
         <div id="auth-notice" style="display: none; color: var(--accent-cyan); font-size: 12px; background: rgba(0, 229, 255, 0.05); border: 1px solid var(--accent-cyan-glow); padding: 8px 12px; border-radius: 6px; text-align: left; font-weight: 500;"></div>
 
         <div class="error-message" id="auth-error" style="display: none; color: var(--danger-color); font-size: 12px; background: rgba(255, 61, 0, 0.05); border: 1px solid rgba(255, 61, 0, 0.15); padding: 8px 12px; border-radius: 6px; text-align: left; font-weight: 500;"></div>
-        
+
         <button type="submit" class="btn-primary" id="btn-login-submit" style="width: 100%; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: var(--accent-cyan); color: #020408; border: none; box-shadow: 0 0 12px var(--accent-cyan-glow);">Sign In</button>
 
         <div id="auth-back-row" style="display: none; text-align: center;">
