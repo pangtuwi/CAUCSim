@@ -5,19 +5,13 @@
     \\  /    A nd           | Version:  13
      \\/     M anipulation  |
 \*---------------------------------------------------------------------------*/
-FoamFile
-{
-    format      ascii;
-    class       dictionary;
-    object      functions;
-}
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-#includeFunc cutPlane
-#includeFunc streamlines
-#includeFunc streamlinesCentreline
-#includeFunc streamlinesOutboard
-#includeFunc forceCoeffs
-#includeFunc wallShearStress
+type            wallShearStress;
+libs            ("libfieldFunctionObjects.so");
+
+patches         (f24);
+
+writeControl    writeTime;
+
 
 // ************************************************************************* //
