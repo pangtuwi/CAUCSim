@@ -623,9 +623,26 @@ chmod +x Allrun
 # Notify API Server: Run completed, processing results
 update_job_status "running" "processing_results"
 
+# Find the solved time directory that reconstructPar -latestTime wrote at the
+# case root (named after the case's endTime, e.g. "500", or "50" for a fast
+# check) so the actual solved fields -- not just the untouched 0/ initial
+# condition -- make it into the downloadable archive.
+shopt -s nullglob
+SOLVED_TIME_DIRS=()
+for d in [0-9]*; do
+  if [ -d "\$d" ] && [ "\$d" != "0" ]; then
+    SOLVED_TIME_DIRS+=("\$d/")
+  fi
+done
+shopt -u nullglob
+
+# Empty placeholder so the packaged case can be opened directly in ParaView's
+# OpenFOAM reader (File > Open > case.foam) with no extra setup.
+touch case.foam
+
 # Compress results (excluding processor directories to save space/bandwidth)
 echo "==> Packaging results..."
-zip -r results.zip 0/ constant/ system/ postProcessing/ simulation.log -x "processor*" || true
+zip -r results.zip 0/ "\${SOLVED_TIME_DIRS[@]}" constant/ system/ postProcessing/ simulation.log case.foam -x "processor*" || true
 
 # Upload results back to S3
 echo "==> Uploading results to S3..."
