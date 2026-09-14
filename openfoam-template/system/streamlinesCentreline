@@ -34,7 +34,7 @@ cloudName       particleTracks;
 // (not literally 0) because the background mesh in blockMeshDict has a
 // cell face exactly at Y=0 -- seeding directly on a mesh face risks
 // interpolation ambiguity/dropped tracks, same reason the sibling
-// `streamlines` (Y=-0.05) and `streamlinesOutboard` (Y=-0.4) files both
+// `streamlines` (Y=-0.1) and `streamlinesOutboard` (Y=-0.3) files both
 // nudge Z off 0 too.
 seedSampleSet
 {

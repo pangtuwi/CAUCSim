@@ -30,18 +30,15 @@ nSubCycle       5;
 // Cloud name to use
 cloudName       particleTracks;
 
-// Seeding method. This is the "outboard" set. Y=-0.4 is a tuned starting
-// point, not a measured value: the seed line sits 1m upstream of the nose,
-// so it needs to land where it will actually pass through car-disturbed
-// flow downstream. For a typical FSAE half-track of ~0.6-0.65m to the tyre
-// centreline, -0.4 targets the sidepod/front-wheel transition zone (likely
-// to show wheel-wake/outwash interaction) rather than missing the car
-// entirely further outboard. Adjust once verified against a real car STL.
+// Seeding method. This is the "outboard" set, tuned to sit 0.3m to one
+// side of the centreline (same side as the "current" set at -0.1m), 1m
+// upstream of the nose so it lands in car-disturbed flow downstream
+// rather than missing the car entirely further outboard.
 seedSampleSet
 {
     type        lineUniform;
-    start       (-1.001 -0.4 0.0011);
-    end         (-1.001 -0.4 1.0011);
+    start       (-1.001 -0.3 0.0011);
+    end         (-1.001 -0.3 1.0011);
     nPoints     20;
 }
 
