@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.58</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.59</span></p>
         </div>
       </div>
 
@@ -84,7 +84,7 @@
           <!-- Stage 1 Card: Select CAD Model -->
           <div class="workflow-card active" id="card-stage-1">
             <p class="card-instruction">
-              Pick a CAD model from the list, or upload a new one below, then ensure units are correct.
+              Choose your car from the list, or drag in a new STL file below. Check the units match how your CAD program saved the file.
             </p>
             <div class="model-list-wrapper" style="max-height: 180px; overflow-y: auto;">
               <div class="model-list-empty" id="library-empty" style="display: none; padding: 15px; text-align: center; color: var(--text-secondary); font-size: 11px;">No STL files found.</div>
@@ -111,9 +111,9 @@
             <div class="upload-dropzone" id="dropzone" style="margin-top: 15px;">
               <input type="file" id="file-input" accept=".stl" style="display: none;">
               <div class="dropzone-content">
-                <p class="primary-text">Drag & drop new CAD model</p>
+                <p class="primary-text">Drag &amp; drop your STL file here</p>
                 <p class="secondary-text">or <span class="browse-link">browse files</span></p>
-                <span class="file-limits">Supports STL (max 500MB)</span>
+                <span class="file-limits">STL files only, up to 500MB</span>
               </div>
               <div class="upload-progress-container" id="upload-progress-bar" style="display: none;">
                 <div class="progress-bar-wrapper">
@@ -137,7 +137,7 @@
           <!-- Stage 2 Card: Check Geometry -->
           <div class="workflow-card disabled" id="card-stage-2">
             <p class="card-instruction">
-              Review model dimensions and verify regulations checklist on the right.
+              Check your car's size and the F24 rules checklist on the right. Every row needs to be green before you can run the simulation.
             </p>
             <button class="btn-primary" id="btn-continue-to-cfd" style="width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px; margin-top: 15px;">
               Continue to CFD Simulation
@@ -150,16 +150,16 @@
           <!-- Stage 3 Card: Run CFD  Simulation -->
           <div class="workflow-card disabled" id="card-stage-3">
             <p class="card-instruction">
-              Run a steady-state 3D OpenFOAM simulation of the design at the race speed set below.
+              Put your car in the virtual wind tunnel. Give the run a name, set the race speed, and press Run &mdash; it takes a few minutes.
             </p>
             <div class="import-options import-options--column">
               <label for="run-name-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Run name:</label>
-              <input type="text" id="run-name-input" maxlength="120" placeholder="e.g. Baseline aero check" style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;">
+              <input type="text" id="run-name-input" maxlength="120" placeholder="e.g. Baseline - no changes yet" style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;">
             </div>
 
             <div class="import-options import-options--column">
               <label for="run-purpose-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Purpose / notes:</label>
-              <textarea id="run-purpose-input" maxlength="1000" rows="6" placeholder="What are you testing?" style="width: 100%; resize: vertical; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;"></textarea>
+              <textarea id="run-purpose-input" maxlength="1000" rows="6" placeholder="What did you change, and what do you expect to happen?" style="width: 100%; resize: vertical; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; box-sizing: border-box;"></textarea>
             </div>
 
             <div class="import-options import-options--split">
@@ -171,7 +171,7 @@
             </div>
 
             <div class="import-options import-options--split">
-              <label for="wheelbase-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Axle-to-axle distance. Used as the reference length for the pitching-moment coefficient.">Wheelbase:</label>
+              <label for="wheelbase-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Distance between the front and rear axles. Filled in from your model; change it if it is wrong.">Wheelbase:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" id="wheelbase-input" value="" min="0.1" max="10" step="0.01" style="width: 55px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 5px 6px; border-radius: 4px; color: var(--text-primary); font-size: 11px; font-family: inherit; outline: none; text-align: right;">
                 <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">m (of model)</span>
@@ -179,10 +179,10 @@
             </div>
 
             <div class="import-options import-options--split">
-              <label for="fast-check-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="Coarse mesh and 50 solver steps. Confirms the model runs, but the coefficients are not accurate.">Fast check:</label>
+              <label for="fast-check-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);" title="A quick, rough run to check the model works. The numbers it gives are not accurate - untick it for a real result.">Fast check:</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="checkbox" id="fast-check-input" style="width: 14px; height: 14px; accent-color: var(--accent-cyan); cursor: pointer;">
-                <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Quick, not accurate</span>
+                <span style="font-size: 10px; color: var(--text-secondary); white-space: nowrap;">Quick, rough test run</span>
               </div>
             </div>
             <button class="btn-primary" id="btn-run-cfd" disabled style="margin-top: 7px; width: 100%; justify-content: center; display: flex; align-items: center; padding: 10px;">
@@ -196,7 +196,7 @@
           <!-- Stage 4 Card: Analyse Results -->
           <div class="workflow-card disabled" id="card-stage-4">
             <p class="card-instruction">
-              Aerodynamic metrics and forces are ready. Review performance charts and download raw case files.
+              Your results are in. Read the drag, lift and power figures on the right, then download the files if you want to keep them.
             </p>
             <div class="cfd-actions" style="display: flex; gap: 8px; flex-direction: column;">
               <a href="#" id="lnk-download-results" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;" target="_blank">
@@ -320,7 +320,7 @@
               <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
               </svg>
-              <p>Upload or select an STL file to render the 3D geometry</p>
+              <p>Choose a car from the list, or drag in an STL file, to see it here in 3D</p>
             </div>
 
             <div class="dimension-labels-container" id="dimension-labels" style="display: none;">
@@ -356,7 +356,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
                 <path d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
               </svg>
-              <p style="font-size: 11px; line-height: 1.5; margin: 0;">No CAD geometry active.<br>Import a new file or select a model from the library on the left.</p>
+              <p style="font-size: 11px; line-height: 1.5; margin: 0;">No car loaded yet.<br>Choose one from the list on the left, or drag in a new STL file.</p>
             </div>
             <div class="stage-data-content" id="import-details-loaded" style="display: none; padding: 10px 0;">
               <div class="details-list" style="display: flex; flex-direction: column; gap: 12px;">
@@ -397,7 +397,7 @@
 
                 <div class="detail-row" style="display: flex; flex-direction: column; gap: 4px;">
                   <span class="detail-label" style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Next Action</span>
-                  <p style="font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0;">Click **Analyse Geometry** under the model list on the left to check regulations compliance and frontal area.</p>
+                  <p style="font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0;">Press <strong>Continue to Geometry Check</strong> on the left to measure your car's frontal area and check it against the F24 rules.</p>
                 </div>
               </div>
             </div>
@@ -415,7 +415,7 @@
               <div class="reg-item" id="frontal-area-item">
                 <div class="reg-indicator"></div>
                 <div class="reg-details">
-                  <span class="name">Projected area normal to flow direction</span>
+                  <span class="name">The shadow your car casts when viewed head-on &mdash; smaller means less air to push out of the way</span>
                   <span class="value"><span id="stat-frontal-area">-</span> m²</span>
                 </div>
               </div>
@@ -506,7 +506,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
                 <circle cx="12" cy="12" r="9" />
               </svg>
-              <p style="font-size: 11px; line-height: 1.5; margin: 0;">No simulation in progress.<br>Start a run from the CFD Simulation panel to see live progress and logs here.</p>
+              <p style="font-size: 11px; line-height: 1.5; margin: 0;">Nothing running yet.<br>Press <strong>Run CFD Simulation</strong> on the left and you will see the progress and the solver's log here.</p>
             </div>
 
             <div class="cfd-monitor" id="cfd-monitor" style="display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
@@ -543,7 +543,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; margin-bottom: 12px; color: rgba(255,255,255,0.15);">
                 <path d="M3 3v18h18M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
               </svg>
-              <p style="font-size: 11px; line-height: 1.5; margin: 0;">Simulation not yet run.<br>Run a CFD simulation in Stage 3 to see aerodynamic results here.</p>
+              <p style="font-size: 11px; line-height: 1.5; margin: 0;">No results yet.<br>Run a simulation in stage 03 and your drag, lift and power figures will appear here.</p>
             </div>
 
             <div class="stage-data-content" id="results-details-loaded" style="display: none;">
@@ -588,21 +588,21 @@
             <!-- Sub-panel: Aerodynamic Forces Graph -->
             <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
               <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Aerodynamic Forces vs. Speed</h3>
-              <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Drag Force (Cyan) & Lift Force (Purple) curves across race velocities ($F \propto v^2$)</p>
+              <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Drag (cyan) and lift (purple) at different speeds. Double the speed and the force goes up four times.</p>
               <div id="forces-chart-svg" class="chart-svg-wrapper" style="height: 170px; position: relative;"></div>
             </div>
 
             <!-- Sub-panel: Aerodynamic Power Graph -->
             <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
               <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Aerodynamic Power Demand</h3>
-              <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Battery power output required to overcome drag force ($P \propto v^3$)</p>
+              <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Power from the battery that goes into pushing air out of the way. Double the speed and it goes up eight times.</p>
               <div id="power-chart-svg" class="chart-svg-wrapper" style="height: 170px; position: relative;"></div>
             </div>
 
             <!-- Sub-panel: Centreline Flow Visualisation -->
             <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
               <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Centreline Flow Visualisation</h3>
-              <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Velocity magnitude slice (0 to <span id="flow-scale-max">30</span> m/s) along the centerline ($Y = 0$ plane)</p>
+              <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Air speed on a slice down the middle of the car, from 0 (dark) to <span id="flow-scale-max">30</span> m/s (bright). The slow patch behind the car is its wake.</p>
               <div id="flow-visualisation-wrapper" style="display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); overflow: hidden; min-height: 150px; position: relative;">
                 <img id="flow-visualisation-img" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;" alt="Flow Visualisation">
                 <div id="flow-visualisation-placeholder" style="color: var(--text-secondary); font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 15px; text-align: center;">
