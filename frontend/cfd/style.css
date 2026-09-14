@@ -1257,7 +1257,9 @@ body {
   color: var(--text-secondary);
 }
 
-#btn-close-log {
+/* Shared by every overlay close button (#btn-close-log, #btn-close-history,
+   #btn-close-help). */
+.btn-modal-close {
   flex: none;
   width: 28px;
   height: 28px;
@@ -1272,7 +1274,7 @@ body {
   transition: all 0.2s;
 }
 
-#btn-close-log:hover {
+.btn-modal-close:hover {
   background: rgba(255, 61, 0, 0.08);
   border-color: rgba(255, 61, 0, 0.2);
   color: var(--danger-color);
@@ -1294,11 +1296,195 @@ body {
   word-break: break-word;
 }
 
+/* Help / Tutorial Overlay */
+/* Same card chrome as the log viewer, but sized to cover 80% of the page in
+   both directions: the screenshot needs the width, the text needs the height. */
+.help-modal-content {
+  width: 80vw;
+  max-width: 1400px;
+  height: 80vh;
+  /* Lighter than the log viewer so the card, and the dark screenshots inside
+     it, stand out from the blurred page behind. */
+  background: linear-gradient(135deg, rgba(30, 40, 60, 0.96), rgba(20, 27, 42, 0.96));
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.help-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 20px;
+}
+
+.help-figure {
+  flex: 3;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.help-figure img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.help-text {
+  flex: 2;
+  min-width: 260px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.help-text h3 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-cyan);
+}
+
+.help-text h3:not(:first-child) {
+  margin-top: 16px;
+}
+
+.help-text p,
+.help-text ul {
+  margin: 0 0 10px 0;
+}
+
+.help-text ul {
+  padding-left: 18px;
+}
+
+.help-text li {
+  margin-bottom: 4px;
+}
+
+.help-text strong {
+  color: var(--text-primary);
+}
+
+.help-text kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.help-text .help-tip {
+  padding: 8px 10px;
+  border-left: 2px solid var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.05);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+}
+
+.help-modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.help-nav-btn {
+  min-width: 100px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-display);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* .btn-secondary has no base rule (header buttons are styled inline), so the
+   Previous button carries its own. */
+.help-nav-btn.btn-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.help-nav-btn.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.help-nav-btn.btn-secondary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.help-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.help-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.2s;
+}
+
+.help-dot:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.help-dot.active {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan-glow);
+}
+
+@media (max-width: 900px) {
+  .help-modal-body {
+    flex-direction: column;
+  }
+  .help-figure {
+    flex: none;
+    max-height: 45%;
+  }
+  .help-text {
+    min-width: 0;
+  }
+}
+
 #btn-logout:hover {
   background: rgba(255, 61, 0, 0.08) !important;
   border-color: rgba(255, 61, 0, 0.2) !important;
   color: var(--danger-color) !important;
   box-shadow: 0 0 10px rgba(255, 61, 0, 0.1);
+}
+
+#btn-help:hover,
+#btn-history:hover {
+  background: rgba(0, 240, 255, 0.08) !important;
+  border-color: rgba(0, 240, 255, 0.3) !important;
+  color: var(--text-primary) !important;
 }
 
 /* CFD Simulation Runner & Console Styling */

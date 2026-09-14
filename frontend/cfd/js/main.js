@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { HELP_PAGES } from './help-content.js';
 
 // --- State Management ---
 let scene, camera, renderer, controls;
@@ -99,6 +100,7 @@ const authBackLink = document.getElementById('auth-back-link');
 const authResendCodeLink = document.getElementById('auth-resend-code-link');
 const btnLogout = document.getElementById('btn-logout');
 const btnHistory = document.getElementById('btn-history');
+const btnHelp = document.getElementById('btn-help');
 const wheelbaseInput = document.getElementById('wheelbase-input');
 const fastCheckInput = document.getElementById('fast-check-input');
 
@@ -1735,11 +1737,13 @@ function validateSession() {
     authModal.style.display = 'none';
     btnLogout.style.display = 'block';
     btnHistory.style.display = 'block';
+    btnHelp.style.display = 'block';
     fetchLibrary();
   } else {
     authModal.style.display = 'flex';
     btnLogout.style.display = 'none';
     btnHistory.style.display = 'none';
+    btnHelp.style.display = 'none';
   }
 }
 
@@ -1753,6 +1757,10 @@ function handleLogout() {
   // live stage like "Preparing" while the user sits at the login modal.
   updateEngineStatus(null);
   showCfdMonitor(false);
+
+  // Every overlay shares z-index 10000 and #help-modal is last in the DOM, so
+  // a 401 while the tutorial is open would paint it over the login modal.
+  closeHelpModal();
 
   // Reset active geometry
   resetActiveGeometry();
@@ -2067,6 +2075,7 @@ authResendCodeLink.addEventListener('click', async () => {
 btnLogout.addEventListener('click', handleLogout);
 
 btnHistory.addEventListener('click', openHistoryModal);
+btnHelp.addEventListener('click', openHelpModal);
 document.getElementById('btn-close-history')?.addEventListener('click', () => {
   historyModal.style.display = 'none';
 });
@@ -2556,6 +2565,71 @@ async function openLogModal() {
     consoleEl.textContent = 'Failed to fetch the execution log. Check your connection and try again.';
   }
 }
+
+// --- Help modal ---
+// Paged tutorial for pupils. Page content lives in help-content.js; this only
+// renders one page at a time into the static shell in index.html, and always
+// starts from page 1 (nothing is remembered between opens, by design).
+// Elements are looked up inside each function, like closeLogModal, so the
+// block between these markers is self-contained for help-modal.test.js.
+let helpPageIndex = 0;
+
+function isHelpModalOpen() {
+  const modal = document.getElementById('help-modal');
+  return !!modal && modal.style.display === 'flex';
+}
+
+function renderHelpPage(idx) {
+  const total = HELP_PAGES.length;
+  if (!total) return;
+  helpPageIndex = Math.min(Math.max(idx, 0), total - 1);
+  const page = HELP_PAGES[helpPageIndex];
+
+  document.getElementById('help-modal-title').textContent = page.title;
+  document.getElementById('help-modal-subtitle').textContent = `Page ${helpPageIndex + 1} of ${total}`;
+
+  const img = document.getElementById('help-image');
+  img.src = page.image;
+  img.alt = page.alt;
+
+  // page.body is static, trusted HTML from help-content.js — never user data.
+  const text = document.getElementById('help-text');
+  text.innerHTML = page.body;
+  text.scrollTop = 0;
+
+  document.getElementById('btn-help-prev').disabled = helpPageIndex === 0;
+  document.getElementById('btn-help-next').textContent = helpPageIndex === total - 1 ? 'Finish' : 'Next';
+
+  document.getElementById('help-dots').innerHTML = HELP_PAGES.map((p, i) =>
+    `<button type="button" class="help-dot${i === helpPageIndex ? ' active' : ''}" data-help-page="${i}" aria-label="Page ${i + 1}: ${p.title}" title="${p.title}"></button>`
+  ).join('');
+}
+
+function helpPrev() {
+  renderHelpPage(helpPageIndex - 1);
+}
+
+function helpNext() {
+  if (helpPageIndex >= HELP_PAGES.length - 1) {
+    closeHelpModal();
+    return;
+  }
+  renderHelpPage(helpPageIndex + 1);
+}
+
+function openHelpModal() {
+  renderHelpPage(0);
+  document.getElementById('help-modal').style.display = 'flex';
+  document.getElementById('btn-help-next').focus();
+}
+
+function closeHelpModal() {
+  if (!isHelpModalOpen()) return;
+  document.getElementById('help-modal').style.display = 'none';
+  const btn = document.getElementById('btn-help');
+  if (btn && btn.style.display !== 'none') btn.focus();
+}
+// --- End help modal ---
 
 function updateEngineStatus(job) {
   const engineStatus = document.getElementById('engine-status');
@@ -3152,12 +3226,41 @@ function initCfdRunner() {
       if (e.target === historyModal) historyModal.style.display = 'none';
     });
   }
+  const helpModal = document.getElementById('help-modal');
+  if (helpModal) {
+    document.getElementById('btn-close-help').addEventListener('click', closeHelpModal);
+    document.getElementById('btn-help-prev').addEventListener('click', helpPrev);
+    document.getElementById('btn-help-next').addEventListener('click', helpNext);
+    document.getElementById('help-dots').addEventListener('click', (e) => {
+      const dot = e.target.closest('[data-help-page]');
+      if (dot) renderHelpPage(parseInt(dot.dataset.helpPage, 10));
+    });
+    helpModal.addEventListener('click', (e) => {
+      if (e.target === helpModal) closeHelpModal();
+    });
+  }
+
+  // --- Overlay keyboard shortcuts ---
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeLogModal();
       if (historyModal) historyModal.style.display = 'none';
+      closeHelpModal();
+      return;
+    }
+    // Arrow keys only page the tutorial while it is open. They go through
+    // renderHelpPage (clamped) rather than helpNext, so an extra right-arrow on
+    // the last page does not close the dialog — only the Finish button does.
+    if (!isHelpModalOpen()) return;
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      renderHelpPage(helpPageIndex + 1);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      renderHelpPage(helpPageIndex - 1);
     }
   });
+  // --- End overlay keyboard shortcuts ---
   
   if (btnRunCfd) {
     btnRunCfd.addEventListener('click', startCfdSimulation);

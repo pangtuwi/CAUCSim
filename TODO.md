@@ -1,5 +1,5 @@
 # TODO List
-Last updated 29 July 2026
+Last updated 14 September 2026
 
 1. Front end display of system errors (some currently only to console.log)
 2. IP Address hard coded in app.js (in userDataScript).   Is this correct?
@@ -10,7 +10,7 @@ Last updated 29 July 2026
 7. AGENTS.md references mock functionality.  Remove.
 8. What is the file "Archive.zip" and what does it do?
 9. ARCHITECTURE.md contains Antigravity Coding Agent Guidelines.   Move to a different file if possible
-10. Go Through index.html and update text to be more audience friendly (Age 11-17 High School Pupils)
+10. Go Through index.html and update text to be more audience friendly (Age 11-17 High School Pupils) — partly addressed by the Help tutorial (`frontend/cfd/js/help-content.js`), which explains each stage in pupil-friendly language; the in-panel `card-instruction` text itself still needs revising.
 11. Review and revise step flow visuals and state memory process. (i.e. what happens if user logs out and in, what happens if browser reloaded?)
 12. Are forces chart and power chart understandable by high school pupils?
 13. Change of app to multi-lambda app (see MULTI_LAMBDA.md in Specifications folder)

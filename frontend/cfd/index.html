@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.56</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.57</span></p>
         </div>
       </div>
 
@@ -50,6 +50,7 @@
           <span class="label">OpenFOAM Engine: <strong id="engine-status-val">Standby</strong></span>
         </div>
       </div>
+      <button id="btn-help" class="btn-secondary" title="Open the step-by-step guide" style="display: none; padding: 6px 12px; font-size: 11px; height: auto; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s; margin-right: 8px;">Help</button>
       <button id="btn-history" class="btn-secondary" style="display: none; padding: 6px 12px; font-size: 11px; height: auto; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s; margin-right: 8px;">Run History</button>
       <button id="btn-logout" class="btn-secondary" style="display: none; padding: 6px 12px; font-size: 11px; height: auto; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); color: var(--text-secondary); cursor: pointer; transition: all 0.2s;">Log Out</button>
     </header>
@@ -708,7 +709,7 @@
           <h2>Execution Log</h2>
           <p id="log-modal-subtitle">Full OpenFOAM solver output for the completed run</p>
         </div>
-        <button class="btn-icon" id="btn-close-log" title="Close log viewer" aria-label="Close log viewer">
+        <button class="btn-icon btn-modal-close" id="btn-close-log" title="Close log viewer" aria-label="Close log viewer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <path stroke-linecap="round" d="M18 6L6 18M6 6l12 12"/>
           </svg>
@@ -726,7 +727,7 @@
           <h2>Run History</h2>
           <p>Past CFD runs for your account</p>
         </div>
-        <button class="btn-icon" id="btn-close-history" title="Close run history" aria-label="Close run history">
+        <button class="btn-icon btn-modal-close" id="btn-close-history" title="Close run history" aria-label="Close run history">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <path stroke-linecap="round" d="M18 6L6 18M6 6l12 12"/>
           </svg>
@@ -735,6 +736,34 @@
       <div class="model-list-wrapper" style="overflow-y: auto; flex: 1;">
         <div class="model-list-empty" id="history-empty" style="display: none; padding: 15px; text-align: center; color: var(--text-secondary); font-size: 11px;">No past runs found.</div>
         <ul class="model-list" id="history-list" style="list-style: none; padding: 0; margin: 0;"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help / Tutorial Overlay (paged; content rendered from js/help-content.js) -->
+  <div id="help-modal" class="auth-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
+    <div class="log-modal-content help-modal-content">
+      <div class="log-modal-header">
+        <div>
+          <h2 id="help-modal-title">Help</h2>
+          <p id="help-modal-subtitle">Page 1 of 6</p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-help" title="Close help" aria-label="Close help">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path stroke-linecap="round" d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="help-modal-body">
+        <figure class="help-figure">
+          <img id="help-image" src="" alt="" decoding="async">
+        </figure>
+        <div class="help-text" id="help-text"></div>
+      </div>
+      <div class="help-modal-footer">
+        <button type="button" class="btn-secondary help-nav-btn" id="btn-help-prev">Previous</button>
+        <div class="help-dots" id="help-dots" aria-label="Tutorial pages"></div>
+        <button type="button" class="btn-primary help-nav-btn" id="btn-help-next">Next</button>
       </div>
     </div>
   </div>
