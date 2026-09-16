@@ -1592,6 +1592,7 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.meanOf = meanOf;
 module.exports.computeCoefficientStatistics = computeCoefficientStatistics;
 module.exports.buildJobSummaryMarkdown = buildJobSummaryMarkdown;
 module.exports.buildCoefficientHistoryCsv = buildCoefficientHistoryCsv;
