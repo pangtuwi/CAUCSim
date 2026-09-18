@@ -67,7 +67,7 @@ export const HELP_PAGES = [
       <h3>The F24 rules checklist</h3>
       <p>Each row compares your model with the competition rules and with what the simulation needs:</p>
       <ul>
-        <li><strong>Length &le; 2400&nbsp;mm, Width &le; 900&nbsp;mm, Height</strong> &mdash; the size limits from the rulebook.</li>
+        <li><strong>Length &le; 2800&nbsp;mm, Width &le; 1200&nbsp;mm, Height &le; 1200&nbsp;mm</strong> &mdash; the size limits from the rulebook.</li>
         <li><strong>Watertight</strong> &mdash; the surface has no holes or gaps. Air would leak inside a model with holes and the results would be nonsense.</li>
         <li><strong>CFD scale</strong> &mdash; the model is in metres and a sensible real-world size (this is where a wrong unit setting shows up).</li>
         <li><strong>X position</strong> &mdash; the nose of the car is at the front of the virtual wind tunnel.</li>

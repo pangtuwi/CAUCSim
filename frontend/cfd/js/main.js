@@ -110,6 +110,7 @@ const statVertices = document.getElementById('stat-vertices');
 const statVolume = document.getElementById('stat-volume');
 const statSurfaceArea = document.getElementById('stat-surface-area');
 const statFrontalArea = document.getElementById('stat-frontal-area');
+const frontalAreaItem = document.getElementById('frontal-area-item');
 const dimLen = document.getElementById('dim-len');
 const dimWid = document.getElementById('dim-wid');
 const dimHei = document.getElementById('dim-hei');
@@ -236,19 +237,20 @@ function lockStage(stageNum) {
 window.lockStage = lockStage;
 
 // --- SVG Performance Charts Rendering ---
-function renderPerformanceCharts() {
-  const cdaVal = parseFloat(document.getElementById('cfd-cda').textContent) || 0.048;
-  const claVal = parseFloat(document.getElementById('cfd-cla').textContent) || -0.019;
-  
-  const forcesWrapper = document.getElementById('forces-chart-svg');
-  const powerWrapper = document.getElementById('power-chart-svg');
-  
-  if (!forcesWrapper || !powerWrapper) return;
-  
-  const w = forcesWrapper.clientWidth || 500;
-  const h = forcesWrapper.clientHeight || 200;
-  
-  const padding = { left: 45, right: 15, top: 15, bottom: 30 };
+// Reads the current CdA / ClA from the summary cards.
+function readChartCoefficients() {
+  return {
+    cdaVal: parseFloat(document.getElementById('cfd-cda').textContent) || 0.048,
+    claVal: parseFloat(document.getElementById('cfd-cla').textContent) || -0.019
+  };
+}
+
+// Builds the two chart SVGs at an arbitrary pixel size so the same drawing
+// code serves both the Results panel and the enlarged chart modal. `scale`
+// grows the paddings, legend and markers for big canvases; label font sizes
+// are handled in CSS (.chart-zoom-body .chart-label-text).
+function buildPerformanceChartSvgs(w, h, cdaVal, claVal, scale = 1) {
+  const padding = { left: 45 * scale, right: 15 * scale, top: 15 * scale, bottom: 30 * scale };
   const graphW = w - padding.left - padding.right;
   const graphH = h - padding.top - padding.bottom;
   
@@ -280,8 +282,9 @@ function renderPerformanceCharts() {
   const raceLiftCoord = mapForceCoords(vRace, raceLiftY);
 
   const xRace = padding.left + (vRace / vMax) * graphW;
+  const markerR = 4.5 * scale;
   
-  forcesWrapper.innerHTML = `
+  const forcesSvg = `
     <svg viewBox="0 0 ${w} ${h}">
       <defs>
         <linearGradient id="drag-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -330,20 +333,20 @@ function renderPerformanceCharts() {
       <line x1="${xRace}" y1="${padding.top}" x2="${xRace}" y2="${h - padding.bottom}" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="2 2" />
       
       <!-- Interactive Points at Race Speed -->
-      <circle cx="${xRace}" cy="${raceDragCoord.split(',')[1]}" r="4.5" class="chart-marker chart-marker-drag" />
-      <circle cx="${xRace}" cy="${raceLiftCoord.split(',')[1]}" r="4.5" class="chart-marker chart-marker-lift" />
+      <circle cx="${xRace}" cy="${raceDragCoord.split(',')[1]}" r="${markerR}" class="chart-marker chart-marker-drag" />
+      <circle cx="${xRace}" cy="${raceLiftCoord.split(',')[1]}" r="${markerR}" class="chart-marker chart-marker-lift" />
       
       <!-- Legend -->
-      <g transform="translate(${padding.left + 15}, ${padding.top + 10})">
-        <rect x="0" y="0" width="8" height="8" fill="var(--accent-cyan)" rx="2"/>
-        <text x="12" y="8" class="chart-label-text" style="fill:var(--text-primary);">Drag Force (N)</text>
+      <g transform="translate(${padding.left + 15 * scale}, ${padding.top + 10 * scale})">
+        <rect x="0" y="0" width="${8 * scale}" height="${8 * scale}" fill="var(--accent-cyan)" rx="2"/>
+        <text x="${12 * scale}" y="${8 * scale}" class="chart-label-text" style="fill:var(--text-primary);">Drag Force (N)</text>
         
-        <rect x="110" y="0" width="8" height="8" fill="var(--accent-purple)" rx="2"/>
-        <text x="122" y="8" class="chart-label-text" style="fill:var(--text-primary);">Lift Force (N)</text>
+        <rect x="${110 * scale}" y="0" width="${8 * scale}" height="${8 * scale}" fill="var(--accent-purple)" rx="2"/>
+        <text x="${122 * scale}" y="${8 * scale}" class="chart-label-text" style="fill:var(--text-primary);">Lift Force (N)</text>
       </g>
       
       <!-- X Axis Label -->
-      <text x="${padding.left + graphW / 2}" y="${h - 5}" class="chart-label-text" text-anchor="middle" style="font-size: 8.5px; fill: var(--text-secondary);">Velocity (m/s)</text>
+      <text x="${padding.left + graphW / 2}" y="${h - 5 * scale}" class="chart-label-text chart-axis-title" text-anchor="middle">Velocity (m/s)</text>
     </svg>
   `;
   
@@ -370,7 +373,7 @@ function renderPerformanceCharts() {
   const racePowerY = raceDragY * vRace;
   const racePowerCoord = mapPowerCoords(vRace, racePowerY);
   
-  powerWrapper.innerHTML = `
+  const powerSvg = `
     <svg viewBox="0 0 ${w} ${h}">
       <defs>
         <linearGradient id="power-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -411,18 +414,33 @@ function renderPerformanceCharts() {
       <line x1="${xRace}" y1="${padding.top}" x2="${xRace}" y2="${h - padding.bottom}" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="2 2" />
       
       <!-- Interactive Point at Race Speed -->
-      <circle cx="${xRace}" cy="${racePowerCoord.split(',')[1]}" r="4.5" class="chart-marker chart-marker-power" />
+      <circle cx="${xRace}" cy="${racePowerCoord.split(',')[1]}" r="${markerR}" class="chart-marker chart-marker-power" />
       
       <!-- Legend -->
-      <g transform="translate(${padding.left + 15}, ${padding.top + 10})">
-        <rect x="0" y="0" width="8" height="8" fill="#ff9d00" rx="2"/>
-        <text x="12" y="8" class="chart-label-text" style="fill:var(--text-primary);">Aero Power Required (W)</text>
+      <g transform="translate(${padding.left + 15 * scale}, ${padding.top + 10 * scale})">
+        <rect x="0" y="0" width="${8 * scale}" height="${8 * scale}" fill="#ff9d00" rx="2"/>
+        <text x="${12 * scale}" y="${8 * scale}" class="chart-label-text" style="fill:var(--text-primary);">Aero Power Required (W)</text>
       </g>
       
       <!-- X Axis Label -->
-      <text x="${padding.left + graphW / 2}" y="${h - 5}" class="chart-label-text" text-anchor="middle" style="font-size: 8.5px; fill: var(--text-secondary);">Velocity (m/s)</text>
+      <text x="${padding.left + graphW / 2}" y="${h - 5 * scale}" class="chart-label-text chart-axis-title" text-anchor="middle">Velocity (m/s)</text>
     </svg>
   `;
+
+  return { forces: forcesSvg, power: powerSvg };
+}
+
+function renderPerformanceCharts() {
+  const forcesWrapper = document.getElementById('forces-chart-svg');
+  const powerWrapper = document.getElementById('power-chart-svg');
+  if (!forcesWrapper || !powerWrapper) return;
+
+  const { cdaVal, claVal } = readChartCoefficients();
+  const w = forcesWrapper.clientWidth || 500;
+  const h = forcesWrapper.clientHeight || 200;
+  const svgs = buildPerformanceChartSvgs(w, h, cdaVal, claVal);
+  forcesWrapper.innerHTML = svgs.forces;
+  powerWrapper.innerHTML = svgs.power;
 }
 window.renderPerformanceCharts = renderPerformanceCharts;
 
@@ -431,6 +449,7 @@ window.addEventListener('resize', () => {
   if (activeStage === 4) {
     renderPerformanceCharts();
   }
+  if (isChartModalOpen()) renderChartModal();
 });
 
 // Helper function to reset active model states
@@ -1012,6 +1031,10 @@ function computeStats(geometry, size) {
   const frontalAreaM2 = calculateFrontalArea(geometry, size);
   statFrontalArea.textContent = frontalAreaM2.toFixed(4);
   currentFrontalArea = frontalAreaM2;
+  if (frontalAreaItem) {
+    const isFrontalAreaOk = frontalAreaM2 >= 0.1 && frontalAreaM2 <= 1.0;
+    frontalAreaItem.className = isFrontalAreaOk ? 'reg-item pass' : 'reg-item fail';
+  }
 
   // Reference length and moment centre for the force coefficients. World units
   // are mm (loadSTL normalises to mm), and the OpenFOAM case is in metres.
@@ -1031,23 +1054,23 @@ function computeStats(geometry, size) {
   }
 
   // F24 Regulations Checks
-  // Max Length: 2400 mm
+  // Max Length: 2800 mm
   regLenVal.textContent = `${l.toFixed(1)} mm`;
-  if (l <= 2400) {
+  if (l <= 2800) {
     regLen.className = 'reg-item pass';
   } else {
     regLen.className = 'reg-item fail';
   }
 
-  // Max Width: 900 mm
+  // Max Width: 1200 mm
   regWidVal.textContent = `${w.toFixed(1)} mm`;
-  if (w <= 900) {
+  if (w <= 1200) {
     regWid.className = 'reg-item pass';
   } else {
     regWid.className = 'reg-item fail';
   }
 
-  // Height context warning (usually F24 cars are < 1000mm)
+  // Max Height: 1200 mm
   regHeiVal.textContent = `${h.toFixed(1)} mm`;
   if (h <= 1200) {
     regHei.className = 'reg-item pass';
@@ -1115,13 +1138,14 @@ function computeStats(geometry, size) {
 
   // Overall regulations validation summary
   const isScaleOk = (scaleStatus === 'pass');
-  if (l <= 2400 && w <= 900 && isWatertight && isScaleOk && isXAligned && isYSymmetrical && isZAligned) {
+  if (l <= 2800 && w <= 1200 && h <= 1200 && isWatertight && isScaleOk && isXAligned && isYSymmetrical && isZAligned) {
     regSummary.textContent = 'PASSED F24 DIMENSIONAL LIMITS';
     regSummary.className = 'reg-summary-box pass';
   } else {
     let reasons = [];
-    if (l > 2400) reasons.push('Length exceeds limit');
-    if (w > 900) reasons.push('Width exceeds limit');
+    if (l > 2800) reasons.push('Length exceeds limit');
+    if (w > 1200) reasons.push('Width exceeds limit');
+    if (h > 1200) reasons.push('Height exceeds limit');
     if (!isWatertight) reasons.push('Mesh not watertight');
     if (!isScaleOk) reasons.push('CFD scale not in meters');
     if (!isXAligned) reasons.push('X position offset');
@@ -2631,6 +2655,85 @@ function closeHelpModal() {
 }
 // --- End help modal ---
 
+// --- Chart zoom modal ---
+// Click-to-enlarge for the Results panel's two charts and the centreline flow
+// image. Charts are re-drawn at the modal's size (not scaled up) so the text
+// stays crisp; the flow image is simply shown at full size.
+const CHART_ZOOM_TITLES = {
+  forces: 'Aerodynamic Forces vs. Speed',
+  power: 'Aerodynamic Power Demand',
+  flow: 'Centreline Flow Visualisation'
+};
+let chartModalKind = null;
+
+function isChartModalOpen() {
+  const modal = document.getElementById('chart-modal');
+  return !!modal && modal.style.display === 'flex';
+}
+
+// Does the box have something worth enlarging yet? The flow image is hidden
+// until a run has produced one; the charts always draw (with defaults) once
+// stage 4 is reachable, so only the image needs a check.
+function chartZoomAvailable(kind) {
+  if (kind !== 'flow') return true;
+  const img = document.getElementById('flow-visualisation-img');
+  return !!img && img.style.display !== 'none' && !!img.getAttribute('src');
+}
+
+function renderChartModal() {
+  if (!chartModalKind) return;
+  const body = document.getElementById('chart-modal-body');
+  const svgHost = document.getElementById('chart-modal-svg');
+  const img = document.getElementById('chart-modal-img');
+  if (!body || !svgHost || !img) return;
+
+  if (chartModalKind === 'flow') {
+    svgHost.style.display = 'none';
+    svgHost.innerHTML = '';
+    img.src = document.getElementById('flow-visualisation-img').src;
+    img.style.display = 'block';
+    return;
+  }
+
+  img.style.display = 'none';
+  img.removeAttribute('src');
+  svgHost.style.display = 'block';
+  const w = body.clientWidth || 900;
+  const h = body.clientHeight || 500;
+  // Grow paddings/markers with the canvas, but not so much that a 2x-wide
+  // chart gets 2x margins.
+  const scale = Math.max(1, Math.min(2, w / 500));
+  const { cdaVal, claVal } = readChartCoefficients();
+  const svgs = buildPerformanceChartSvgs(w, h, cdaVal, claVal, scale);
+  svgHost.innerHTML = chartModalKind === 'forces' ? svgs.forces : svgs.power;
+}
+
+function openChartModal(kind) {
+  if (!CHART_ZOOM_TITLES[kind] || !chartZoomAvailable(kind)) return;
+  chartModalKind = kind;
+  const box = document.querySelector(`.chart-box[data-zoom="${kind}"]`);
+  const desc = box ? box.querySelector('.chart-desc') : null;
+  document.getElementById('chart-modal-title').textContent = CHART_ZOOM_TITLES[kind];
+  document.getElementById('chart-modal-subtitle').innerHTML = desc ? desc.innerHTML : '';
+  const modal = document.getElementById('chart-modal');
+  modal.style.display = 'flex';
+  // Layout must happen before the body has a size to draw into.
+  renderChartModal();
+  document.getElementById('btn-close-chart').focus();
+}
+
+function closeChartModal() {
+  if (!isChartModalOpen()) return;
+  const modal = document.getElementById('chart-modal');
+  modal.style.display = 'none';
+  document.getElementById('chart-modal-svg').innerHTML = '';
+  document.getElementById('chart-modal-img').removeAttribute('src');
+  const box = chartModalKind ? document.querySelector(`.chart-box[data-zoom="${chartModalKind}"]`) : null;
+  chartModalKind = null;
+  if (box) box.focus();
+}
+// --- End chart zoom modal ---
+
 function updateEngineStatus(job) {
   const engineStatus = document.getElementById('engine-status');
   const engineStatusVal = document.getElementById('engine-status-val');
@@ -3240,12 +3343,30 @@ function initCfdRunner() {
     });
   }
 
+  const chartModal = document.getElementById('chart-modal');
+  if (chartModal) {
+    document.getElementById('btn-close-chart').addEventListener('click', closeChartModal);
+    chartModal.addEventListener('click', (e) => {
+      if (e.target === chartModal) closeChartModal();
+    });
+    document.querySelectorAll('.chart-box[data-zoom]').forEach((box) => {
+      box.addEventListener('click', () => openChartModal(box.dataset.zoom));
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openChartModal(box.dataset.zoom);
+        }
+      });
+    });
+  }
+
   // --- Overlay keyboard shortcuts ---
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeLogModal();
       if (historyModal) historyModal.style.display = 'none';
       closeHelpModal();
+      closeChartModal();
       return;
     }
     // Arrow keys only page the tutorial while it is open. They go through

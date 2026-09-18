@@ -12,6 +12,9 @@
   --accent-cyan-glow: rgba(0, 240, 255, 0.25);
   --accent-violet: #8a2be2;
   --accent-violet-glow: rgba(138, 43, 226, 0.25);
+  /* The lift line/legend/marker in the forces chart use this name; without
+     it the stroke resolved to nothing and the lift curve never drew. */
+  --accent-purple: #bc13fe;
   
   --text-primary: #f0f4fc;
   --text-secondary: #8e9db7;
@@ -1458,6 +1461,77 @@ body {
 .help-dot.active {
   background: var(--accent-cyan);
   box-shadow: 0 0 6px var(--accent-cyan-glow);
+}
+
+/* Chart / Flow Image Zoom Overlay */
+/* The Results-panel chart boxes are clickable; the hint icon in their heading
+   only lights up on hover/focus so the panel stays quiet otherwise. */
+.chart-box--zoomable {
+  cursor: zoom-in;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.chart-box--zoomable:hover,
+.chart-box--zoomable:focus-visible {
+  border-color: rgba(0, 240, 255, 0.3) !important;
+  background: rgba(0, 240, 255, 0.04) !important;
+  outline: none;
+}
+
+.chart-expand-hint {
+  display: inline-flex;
+  color: var(--text-secondary);
+  opacity: 0.35;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.chart-box--zoomable:hover .chart-expand-hint,
+.chart-box--zoomable:focus-visible .chart-expand-hint {
+  opacity: 1;
+  color: var(--accent-cyan);
+}
+
+.chart-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.chart-modal-body .chart-svg-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-modal-body img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* Bigger type for the enlarged charts (the SVG is redrawn at modal size, not
+   scaled, so font sizes have to be raised explicitly). */
+.chart-zoom-body .chart-label-text {
+  font-size: 13px;
+}
+
+.chart-zoom-body .chart-axis-title {
+  font-size: 13px;
+  fill: var(--text-secondary);
+}
+
+/* In-panel axis title (was an inline style before the charts were shared
+   with the zoom modal). */
+.chart-axis-title {
+  font-size: 8.5px;
+  fill: var(--text-secondary);
 }
 
 @media (max-width: 900px) {

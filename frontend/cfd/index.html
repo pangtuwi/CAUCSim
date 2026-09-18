@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.59</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.60</span></p>
         </div>
       </div>
 
@@ -415,7 +415,7 @@
               <div class="reg-item" id="frontal-area-item">
                 <div class="reg-indicator"></div>
                 <div class="reg-details">
-                  <span class="name">The shadow your car casts when viewed head-on &mdash; smaller means less air to push out of the way</span>
+                  <span class="name" title="The shadow your car casts when viewed head-on &mdash; smaller means less air to push out of the way">Frontal Area</span>
                   <span class="value"><span id="stat-frontal-area">-</span> m²</span>
                 </div>
               </div>
@@ -430,7 +430,7 @@
               <div class="reg-item" id="reg-len">
                 <div class="reg-indicator"></div>
                 <div class="reg-details">
-                  <span class="name">Max Total Length (&le; 2400mm)</span>
+                  <span class="name">Max Total Length (&le; 2800mm)</span>
                   <span class="value" id="reg-len-val">-</span>
                 </div>
               </div>
@@ -438,7 +438,7 @@
               <div class="reg-item" id="reg-wid">
                 <div class="reg-indicator"></div>
                 <div class="reg-details">
-                  <span class="name">Max Total Width (&le; 900mm)</span>
+                  <span class="name">Max Total Width (&le; 1200mm)</span>
                   <span class="value" id="reg-wid-val">-</span>
                 </div>
               </div>
@@ -446,7 +446,7 @@
               <div class="reg-item" id="reg-hei">
                 <div class="reg-indicator"></div>
                 <div class="reg-details">
-                  <span class="name">Max Height limit (CFD context)</span>
+                  <span class="name">Max Height (&le; 1200mm)</span>
                   <span class="value" id="reg-hei-val">-</span>
                 </div>
               </div>
@@ -586,22 +586,28 @@
             </div>
 
             <!-- Sub-panel: Aerodynamic Forces Graph -->
-            <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
-              <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Aerodynamic Forces vs. Speed</h3>
+            <div class="chart-box chart-box--zoomable" data-zoom="forces" tabindex="0" role="button" aria-label="Enlarge: Aerodynamic Forces vs. Speed" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
+              <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;">Aerodynamic Forces vs. Speed<span class="chart-expand-hint" aria-hidden="true" title="Click to enlarge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+              </span></h3>
               <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Drag (cyan) and lift (purple) at different speeds. Double the speed and the force goes up four times.</p>
               <div id="forces-chart-svg" class="chart-svg-wrapper" style="height: 170px; position: relative;"></div>
             </div>
 
             <!-- Sub-panel: Aerodynamic Power Graph -->
-            <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
-              <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Aerodynamic Power Demand</h3>
+            <div class="chart-box chart-box--zoomable" data-zoom="power" tabindex="0" role="button" aria-label="Enlarge: Aerodynamic Power Demand" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
+              <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;">Aerodynamic Power Demand<span class="chart-expand-hint" aria-hidden="true" title="Click to enlarge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+              </span></h3>
               <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Power from the battery that goes into pushing air out of the way. Double the speed and it goes up eight times.</p>
               <div id="power-chart-svg" class="chart-svg-wrapper" style="height: 170px; position: relative;"></div>
             </div>
 
             <!-- Sub-panel: Centreline Flow Visualisation -->
-            <div class="chart-box" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
-              <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0;">Centreline Flow Visualisation</h3>
+            <div class="chart-box chart-box--zoomable" data-zoom="flow" tabindex="0" role="button" aria-label="Enlarge: Centreline Flow Visualisation" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; margin-top: 15px;">
+              <h3 style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;">Centreline Flow Visualisation<span class="chart-expand-hint" aria-hidden="true" title="Click to enlarge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path stroke-linecap="round" stroke-linejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+              </span></h3>
               <p class="chart-desc" style="font-size: 9px; color: var(--text-secondary); margin: 0 0 10px 0;">Air speed on a slice down the middle of the car, from 0 (dark) to <span id="flow-scale-max">30</span> m/s (bright). The slow patch behind the car is its wake.</p>
               <div id="flow-visualisation-wrapper" style="display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); overflow: hidden; min-height: 150px; position: relative;">
                 <img id="flow-visualisation-img" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;" alt="Flow Visualisation">
@@ -764,6 +770,27 @@
         <button type="button" class="btn-secondary help-nav-btn" id="btn-help-prev">Previous</button>
         <div class="help-dots" id="help-dots" aria-label="Tutorial pages"></div>
         <button type="button" class="btn-primary help-nav-btn" id="btn-help-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart / Flow Image Zoom Overlay (Stage 4 chart boxes, click to enlarge) -->
+  <div id="chart-modal" class="auth-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
+    <div class="log-modal-content help-modal-content chart-modal-content">
+      <div class="log-modal-header">
+        <div>
+          <h2 id="chart-modal-title">Chart</h2>
+          <p id="chart-modal-subtitle"></p>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btn-close-chart" title="Close" aria-label="Close enlarged chart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path stroke-linecap="round" d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="chart-modal-body chart-zoom-body" id="chart-modal-body">
+        <div id="chart-modal-svg" class="chart-svg-wrapper"></div>
+        <img id="chart-modal-img" alt="Centreline flow visualisation, enlarged" style="display: none;">
       </div>
     </div>
   </div>
