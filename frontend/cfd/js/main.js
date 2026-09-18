@@ -2198,6 +2198,7 @@ function renderHistoryList(jobs) {
     const statusColors = {
       completed: '#00e08a',
       failed: '#ff4d4d',
+      cancelled: '#ffaa00',
       running: '#00f0ff',
       queued: '#ffaa00'
     };
@@ -2269,7 +2270,7 @@ async function viewHistoricalJob(jobId) {
 
     if (job.status === 'completed') {
       displayCfdResults(job);
-    } else if (job.status === 'failed') {
+    } else if (job.status === 'failed' || job.status === 'cancelled') {
       displayFailedCfdState(job);
     } else {
       showCfdMonitor(true);
@@ -2487,7 +2488,7 @@ async function pollCfdStatus() {
       displayCfdResults(job);
       unlockStage(4);
       switchStage(4);
-    } else if (job.status === 'failed') {
+    } else if (job.status === 'failed' || job.status === 'cancelled') {
       stopCfdPolling();
       displayFailedCfdState(job);
       switchStage(3);
@@ -2503,6 +2504,83 @@ function stopCfdPolling() {
     cfdPollInterval = null;
   }
 }
+
+// --- Stop simulation ---
+// Lets the user abort a queued/running job rather than only ever waiting for
+// it to finish or fail on its own. The confirmation guards against an
+// accidental click destroying real in-progress compute; the actual
+// termination (including killing the DigitalOcean droplet, so an abort stops
+// billed compute rather than just client-side polling) happens server-side
+// once confirmed.
+function isStopCfdModalOpen() {
+  const modal = document.getElementById('stop-cfd-modal');
+  return !!modal && modal.style.display === 'flex';
+}
+
+function openStopCfdModal() {
+  if (!activeJobId) return;
+  const modal = document.getElementById('stop-cfd-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeStopCfdModal() {
+  const modal = document.getElementById('stop-cfd-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Only ever visible while a run is actually in flight, and never for a
+// read-only historical run being browsed via Run History.
+function setStopCfdButtonVisible(visible) {
+  const btnStopCfd = document.getElementById('btn-stop-cfd');
+  if (btnStopCfd) btnStopCfd.style.display = visible ? 'flex' : 'none';
+}
+
+async function confirmStopCfdSimulation() {
+  if (!activeJobId) {
+    closeStopCfdModal();
+    return;
+  }
+  const jobIdToStop = activeJobId;
+  const btnConfirm = document.getElementById('btn-confirm-stop-cfd');
+  const originalLabel = btnConfirm ? btnConfirm.textContent : '';
+  if (btnConfirm) {
+    btnConfirm.disabled = true;
+    btnConfirm.textContent = 'Stopping…';
+  }
+
+  try {
+    const response = await fetch(`/api/jobs/${jobIdToStop}/stop`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${idToken || ''}` }
+    });
+
+    if (response.status === 401) {
+      closeStopCfdModal();
+      handleLogout();
+      return;
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to stop the simulation.');
+    }
+
+    const job = await response.json();
+    closeStopCfdModal();
+    stopCfdPolling();
+    updateCfdMonitorState(job);
+    displayFailedCfdState(job);
+    switchStage(3);
+  } catch (err) {
+    console.error('Error stopping CFD job:', err);
+    alert(err.message || 'Failed to stop the simulation.');
+  } finally {
+    if (btnConfirm) {
+      btnConfirm.disabled = false;
+      btnConfirm.textContent = originalLabel || 'Stop Simulation';
+    }
+  }
+}
+// --- End stop simulation ---
 
 // Helper to scroll the CFD console robustly to the bottom
 function scrollConsoleToBottom(consoleEl) {
@@ -2739,7 +2817,7 @@ function updateEngineStatus(job) {
   const engineStatusVal = document.getElementById('engine-status-val');
   if (!engineStatus || !engineStatusVal) return;
   
-  if (!job || job.status === 'completed' || job.status === 'failed') {
+  if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
     engineStatus.className = 'status-indicator standby';
     engineStatusVal.textContent = 'Standby';
   } else if (job.status === 'queued') {
@@ -2795,9 +2873,9 @@ function updateCfdMonitorState(job) {
       break;
     default:
       stageName = job.status || 'Running';
-      percent = job.status === 'failed' ? 100 : 0;
+      percent = (job.status === 'failed' || job.status === 'cancelled') ? 100 : 0;
   }
-  
+
   statusBadge.textContent = stageName;
   progressFill.style.width = `${percent}%`;
 
@@ -2805,7 +2883,7 @@ function updateCfdMonitorState(job) {
   // in flight -- once the job reaches a terminal state, displayCfdResults /
   // displayFailedCfdState own the button's label (and re-enable it) instead.
   const btnRunCfd = document.getElementById('btn-run-cfd');
-  if (btnRunCfd && btnRunCfd.disabled && job.status !== 'completed' && job.status !== 'failed') {
+  if (btnRunCfd && btnRunCfd.disabled && job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled') {
     setRunCfdButtonSpinnerLabel(stageName);
   }
 
@@ -2815,6 +2893,12 @@ function updateCfdMonitorState(job) {
     statusBadge.style.borderColor = '#ff3d00';
     statusBadge.style.color = '#ff3d00';
     progressFill.style.background = '#ff3d00';
+  } else if (job.status === 'cancelled') {
+    statusBadge.textContent = 'Stopped';
+    statusBadge.style.background = 'rgba(255, 170, 0, 0.1)';
+    statusBadge.style.borderColor = '#ffaa00';
+    statusBadge.style.color = '#ffaa00';
+    progressFill.style.background = '#ffaa00';
   } else if (job.status === 'completed') {
     statusBadge.style.background = 'rgba(51, 255, 51, 0.1)';
     statusBadge.style.borderColor = '#33ff33';
@@ -2826,7 +2910,8 @@ function updateCfdMonitorState(job) {
     statusBadge.style.color = 'var(--accent-cyan)';
     progressFill.style.background = 'linear-gradient(90deg, var(--accent-cyan), var(--accent-purple))';
   }
-  
+
+  setStopCfdButtonVisible(!viewingHistoryReadOnly && (job.status === 'queued' || job.status === 'running'));
   updateEngineStatus(job);
 }
 
@@ -3202,7 +3287,9 @@ function displayFailedCfdState(job) {
   showCfdMonitor(true);
   const consoleEl = document.getElementById('cfd-console');
   if (consoleEl) {
-    consoleEl.textContent += `\n\n[ERROR] CFD Simulation failed: ${job.error || 'Unknown Error'}\n`;
+    consoleEl.textContent += job.status === 'cancelled'
+      ? `\n\n[STOPPED] Simulation stopped by user.\n`
+      : `\n\n[ERROR] CFD Simulation failed: ${job.error || 'Unknown Error'}\n`;
     scrollConsoleToBottom(consoleEl);
   }
   
@@ -3225,6 +3312,7 @@ function clearCfdRun() {
   showCfdMonitor(false);
   showResultsSummary(false);
   updateEngineStatus(null);
+  setStopCfdButtonVisible(false);
   
   // Clear flow visualization state
   const imgEl = document.getElementById('flow-visualisation-img');
@@ -3360,6 +3448,21 @@ function initCfdRunner() {
     });
   }
 
+  const stopCfdModal = document.getElementById('stop-cfd-modal');
+  if (stopCfdModal) {
+    document.getElementById('btn-close-stop-cfd').addEventListener('click', closeStopCfdModal);
+    document.getElementById('btn-cancel-stop-cfd').addEventListener('click', closeStopCfdModal);
+    document.getElementById('btn-confirm-stop-cfd').addEventListener('click', confirmStopCfdSimulation);
+    stopCfdModal.addEventListener('click', (e) => {
+      if (e.target === stopCfdModal) closeStopCfdModal();
+    });
+  }
+
+  const btnStopCfd = document.getElementById('btn-stop-cfd');
+  if (btnStopCfd) {
+    btnStopCfd.addEventListener('click', openStopCfdModal);
+  }
+
   // --- Overlay keyboard shortcuts ---
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -3367,6 +3470,7 @@ function initCfdRunner() {
       if (historyModal) historyModal.style.display = 'none';
       closeHelpModal();
       closeChartModal();
+      closeStopCfdModal();
       return;
     }
     // Arrow keys only page the tutorial while it is open. They go through
@@ -3539,7 +3643,7 @@ function initCfdRunner() {
         unlockStage(4);
         displayCfdResults(job);
         switchStage(4);
-      } else if (job.status === 'failed') {
+      } else if (job.status === 'failed' || job.status === 'cancelled') {
         displayFailedCfdState(job);
         switchStage(3);
       } else {

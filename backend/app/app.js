@@ -955,6 +955,50 @@ app.get('/api/jobs/:id', requireAuth, async (req, res) => {
   res.json(clientState);
 });
 
+// 3b. POST /api/jobs/:id/stop: User-initiated cancellation of an in-flight run.
+// Best-effort on the droplet delete: if DigitalOcean can't be reached or the
+// droplet is already gone, the job is still marked cancelled (the droplet's
+// own 1-hour safety timer -- see the userDataScript above -- destroys it
+// eventually regardless), so a flaky DO API call can never strand the job in
+// a permanently "running" state from the user's point of view.
+app.post('/api/jobs/:id/stop', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const jobState = await getJobState(jobId);
+  if (!jobState) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  if (jobState.userSub && jobState.userSub !== req.user.sub) {
+    return res.status(403).json({ error: 'Not authorized to stop this job' });
+  }
+  if (jobState.status !== 'queued' && jobState.status !== 'running') {
+    return res.status(400).json({ error: `Job is already ${jobState.status} and cannot be stopped.` });
+  }
+
+  const doToken = process.env.DIGITALOCEAN_TOKEN;
+  if (jobState.dropletId && doToken) {
+    try {
+      const doRes = await fetch(`https://api.digitalocean.com/v2/droplets/${jobState.dropletId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${doToken}` }
+      });
+      if (!doRes.ok && doRes.status !== 404) {
+        console.error(`Failed to delete droplet ${jobState.dropletId} for job ${jobId}: ${doRes.status} ${await doRes.text()}`);
+      }
+    } catch (err) {
+      console.error(`Error deleting droplet ${jobState.dropletId} for job ${jobId}:`, err);
+    }
+  }
+
+  jobState.status = 'cancelled';
+  jobState.error = 'Stopped by user.';
+  jobState.completedAt = new Date().toISOString();
+  await saveJobState(jobId, jobState);
+
+  const clientState = { ...jobState };
+  delete clientState.jobToken;
+  res.json(clientState);
+});
+
 // --- Force-coefficient reporting -------------------------------------------
 
 // Trailing iterations averaged for the reported value, and the shorter windows

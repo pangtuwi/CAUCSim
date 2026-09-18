@@ -46,7 +46,7 @@ function loadHelpModule(pages = HELP_PAGES) {
   document.documentElement.innerHTML = INDEX_HTML;
 
   const factory = new Function('deps', `
-    const { HELP_PAGES, closeLogModal, closeChartModal, historyModal } = deps;
+    const { HELP_PAGES, closeLogModal, closeChartModal, closeStopCfdModal, historyModal } = deps;
 
     ${helpModalSource}
     ${keyboardSource}
@@ -64,8 +64,9 @@ function loadHelpModule(pages = HELP_PAGES) {
 
   const closeLogModal = jest.fn();
   const closeChartModal = jest.fn();
+  const closeStopCfdModal = jest.fn();
   const historyModal = document.getElementById('history-modal');
-  const api = factory({ HELP_PAGES: pages, closeLogModal, closeChartModal, historyModal });
+  const api = factory({ HELP_PAGES: pages, closeLogModal, closeChartModal, closeStopCfdModal, historyModal });
   return { ...api, closeLogModal, historyModal };
 }
 

@@ -603,6 +603,33 @@ body {
   box-shadow: none;
 }
 
+/* Destructive actions (Stop Simulation, and its confirmation) -- same shape
+   as .btn-primary but in the danger palette instead of accent cyan. */
+.btn-danger {
+  display: flex;
+  background: rgba(255, 61, 0, 0.08);
+  border: 1px solid rgba(255, 61, 0, 0.4);
+  border-radius: 8px;
+  color: var(--danger-color);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(255, 61, 0, 0.18);
+  border-color: var(--danger-color);
+  box-shadow: 0 0 16px var(--danger-glow);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .library-search {
   margin-bottom: 12px;
 }

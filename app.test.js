@@ -878,5 +878,128 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       expect(response.headers.location).toContain('https://mock-s3-presigned-url.com/results/');
       expect(response.headers.location).toContain('/results.zip');
     });
+
+    describe('POST /api/jobs/:id/stop (user-initiated cancellation)', () => {
+      it('should reject without auth', async () => {
+        const state = await createJobWithState({});
+        const response = await request(app).post(`/api/jobs/${state.jobId}/stop`);
+        expect(response.status).toBe(401);
+      });
+
+      it('should return 404 for an unknown job', async () => {
+        const response = await request(app)
+          .post('/api/jobs/non-existent-job/stop')
+          .set('Authorization', authHeaderValue);
+        expect(response.status).toBe(404);
+      });
+
+      it("should reject stopping another user's job", async () => {
+        const jobId = 'job-owned-by-someone-else';
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId,
+          status: 'running',
+          dropletId: 55555,
+          userSub: 'a-different-user-sub'
+        });
+
+        const response = await request(app)
+          .post(`/api/jobs/${jobId}/stop`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(403);
+      });
+
+      it('should reject stopping a job that has already finished', async () => {
+        const jobId = 'job-already-completed';
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId,
+          status: 'completed',
+          dropletId: null,
+          userSub: 'mock-user-sub-123'
+        });
+
+        const response = await request(app)
+          .post(`/api/jobs/${jobId}/stop`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('completed');
+      });
+
+      it('should delete the droplet and mark a running job cancelled', async () => {
+        const state = await createJobWithState({});
+        expect(state.dropletId).toBe(98765); // from the global fetch mock's droplet creation response
+
+        const fetchCallsBefore = global.fetch.mock.calls.length;
+
+        const response = await request(app)
+          .post(`/api/jobs/${state.jobId}/stop`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('cancelled');
+        expect(response.body.error).toBe('Stopped by user.');
+        expect(response.body).not.toHaveProperty('jobToken');
+
+        // The persisted state (not just the response) must reflect the cancellation.
+        const persisted = JSON.parse(mockInMemoryS3[`results/${state.jobId}/job.json`].toString());
+        expect(persisted.status).toBe('cancelled');
+        expect(persisted.completedAt).toBeTruthy();
+
+        // A DELETE was issued against this job's droplet, authenticated with the DO token.
+        const deleteCall = global.fetch.mock.calls
+          .slice(fetchCallsBefore)
+          .find(([url, options]) => options && options.method === 'DELETE');
+        expect(deleteCall).toBeTruthy();
+        expect(deleteCall[0]).toBe(`https://api.digitalocean.com/v2/droplets/${state.dropletId}`);
+        expect(deleteCall[1].headers.Authorization).toBe('Bearer mock-do-token');
+      });
+
+      it('should still mark the job cancelled if the DigitalOcean delete call fails', async () => {
+        const state = await createJobWithState({});
+
+        const originalImpl = global.fetch.getMockImplementation();
+        global.fetch.mockImplementation(async (url, options) => {
+          if (options && options.method === 'DELETE' && url.includes('/v2/droplets/')) {
+            return { ok: false, status: 500, text: async () => 'Internal Server Error' };
+          }
+          return originalImpl(url, options);
+        });
+
+        try {
+          const response = await request(app)
+            .post(`/api/jobs/${state.jobId}/stop`)
+            .set('Authorization', authHeaderValue);
+
+          // The droplet's own 1-hour safety timer is the backstop for this case
+          // (see userDataScript) -- the job must not be left stuck as "running"
+          // just because this one DELETE call failed.
+          expect(response.status).toBe(200);
+          expect(response.body.status).toBe('cancelled');
+        } finally {
+          global.fetch.mockImplementation(originalImpl);
+        }
+      });
+
+      it('should mark a queued job (no droplet yet) cancelled without calling DigitalOcean', async () => {
+        const jobId = 'job-queued-no-droplet';
+        mockInMemoryS3[`results/${jobId}/job.json`] = JSON.stringify({
+          jobId,
+          status: 'queued',
+          dropletId: null,
+          userSub: 'mock-user-sub-123'
+        });
+
+        const fetchCallsBefore = global.fetch.mock.calls.length;
+
+        const response = await request(app)
+          .post(`/api/jobs/${jobId}/stop`)
+          .set('Authorization', authHeaderValue);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('cancelled');
+        expect(global.fetch.mock.calls.length).toBe(fetchCallsBefore);
+      });
+    });
   });
 });
