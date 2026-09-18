@@ -1,0 +1,73 @@
+# CAUCSim Admin — deployment definition.
+#
+# NOT DEPLOYED as part of normal work, and deliberately absent from
+# .github/workflows/deploy.yml: deploying the admin app is a considered decision,
+# not a side effect of pushing to main. To deploy by hand:
+#
+#   cd admin && npx serverless deploy
+#
+# A separate service rather than a second function in the root serverless.yaml,
+# because it needs its own IAM role (the public API has no business holding
+# cognito-idp read permissions) and its own API Gateway, so the admin surface is
+# never a path on the public app's domain.
+#
+# Before deploying, read the note at the bottom about exposure.
+service: caucsim-admin
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-west-2
+  memorySize: 512
+  stage: 'prod'
+  environment:
+    S3_BUCKET_NAME: ${env:S3_BUCKET_NAME, ''}
+    COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID, ''}
+    COGNITO_CLIENT_ID: ${env:COGNITO_CLIENT_ID, ''}
+    ADMIN_GROUP: ${env:ADMIN_GROUP, 'admins'}
+    ADMIN_AUDIT_S3: ${env:ADMIN_AUDIT_S3, 'true'}
+    NODE_ENV: production
+  iam:
+    role:
+      statements:
+        # Read and delete anything in the bucket. PutObject is only used to
+        # write audit records; drop it if ADMIN_AUDIT_S3 stays false.
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+          Resource: arn:aws:s3:::${env:S3_BUCKET_NAME}/*
+        - Effect: Allow
+          Action:
+            - s3:ListBucket
+          Resource: arn:aws:s3:::${env:S3_BUCKET_NAME}
+        # Read-only on Cognito. This app never creates, disables or deletes an
+        # account — that stays in the CLI (Documentation/USER_MANAGEMENT.md).
+        - Effect: Allow
+          Action:
+            - cognito-idp:ListUsers
+            - cognito-idp:ListGroups
+            - cognito-idp:ListUsersInGroup
+          # Serverless variables rather than Fn::Sub, so there is no ${...}
+          # ambiguity between Serverless and CloudFormation resolution.
+          Resource: arn:aws:cognito-idp:${self:provider.region}:${aws:accountId}:userpool/${env:COGNITO_USER_POOL_ID}
+
+package:
+  patterns:
+    - '!.env*'
+    - '!**/*.test.js'
+    - '!test-support.js'
+    - '!README.md'
+
+functions:
+  api:
+    handler: app.handler
+
+# ---------------------------------------------------------------------------
+# If you deploy this, put CloudFront + WAF IP allow-listing in front of it.
+# Membership of one Cognito group is thin protection for an endpoint that can
+# delete every simulation in the bucket, and API Gateway URLs are public by
+# default. Running it locally (npm start, bound to 127.0.0.1) avoids the
+# question entirely, which is why that is the default.
+# ---------------------------------------------------------------------------

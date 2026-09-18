@@ -13,3 +13,11 @@ Last updated 18 September 2026
 10. Review and revise step flow visuals and state memory process. (i.e. what happens if user logs out and in, what happens if browser reloaded?)
 11. Are forces chart and power chart understandable by high school pupils?
 12. Change of app to multi-lambda app (see MULTI_LAMBDA.md in Specifications folder)
+13. `GET /api/jobs` and `GET /api/files` in backend/app/app.js call
+    `ListObjectsV2Command` without a continuation-token loop, so they silently stop
+    at 1000 keys. At roughly 11 keys per completed job that means users start losing
+    their own run history at around job 90. `admin/lib/s3.js#listAllObjects` shows
+    the paginated form to copy.
+14. Decide whether S3 versioning should be enabled on the storage bucket. The admin
+    app deletes permanently and versioning is the only undo that exists — but it
+    would then need per-version deletes to be genuinely permanent.

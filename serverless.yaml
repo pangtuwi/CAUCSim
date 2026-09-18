@@ -26,6 +26,7 @@ provider:
 package:
   patterns:
     - '!.env*'          # credentials come from Lambda env vars, never the bundle
+    - '!admin/**'       # the admin app is its own service (admin/serverless.yaml)
     - '!Archive.zip'
     - '!Documentation/**'
     - '!Specifications/**'

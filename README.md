@@ -70,6 +70,8 @@ CAUCSim/
 │   └── cfd/                 # CFD UI (index.html, style.css, js/main.js, icons)
 ├── backend/
 │   └── app/app.js           # Express app + all API routes; the Lambda handler
+├── admin/                   # Separate admin app (port 3001): users, all
+│                            # simulations, all CAD files — view/download/delete
 ├── infra/
 │   └── cloudfront/          # Terraform: S3 origin bucket + CloudFront distribution
 ├── openfoam-template/       # OpenFOAM case template, zipped and uploaded to S3
@@ -86,6 +88,14 @@ unchanged: the single Lambda still serves `frontend/cfd/` as static assets along
 the API. `serverless.yaml` therefore stays at the repository root — it can only package
 files inside its own service directory — and moves into `backend/` in step 2, once
 CloudFront and S3 take over serving the UI.
+
+`admin/` is a standalone Express app with its own `package.json` and
+`node_modules`, run locally on port 3001 with `npm run admin`. It is the only place
+that can see across accounts: the CFD API deliberately scopes `GET /api/jobs` to the
+caller's own `userSub`, so nobody — including the operator — can list everyone's runs
+from the main UI. Access is gated on membership of the Cognito `admins` group. It has
+a `serverless.yaml` and exports a Lambda handler, but is **not deployed**. See
+[admin/README.md](admin/README.md).
 
 `infra/cloudfront/` holds the Terraform for that next step. It is written and
 validated but **not yet applied** — no CloudFront distribution exists, and the Lambda
@@ -147,3 +157,4 @@ For detailed technical specifications and setup guides, refer to:
 *   [SETUP_DROPLET.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/SETUP_DROPLET.md) - How to build and update the pre-baked DigitalOcean snapshot (OpenFOAM + headless ParaView) that CFD droplets boot from.
 *   [DEV-MACHINE-SETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/DEV-MACHINE-SETUP.md) - Getting a new Mac from nothing to running, deploying and applying infrastructure: Homebrew, nvm/Node, AWS CLI, Terraform, and the `.env` value sources.
 *   [CLOUDFRONT-SETUP.md](file:///Users/paulwilliams/Documents/Programming/CAUCSim/Documentation/CLOUDFRONT-SETUP.md) - Runbook for standing up S3 + CloudFront, adding the `/api/*` passthrough, and cutting DNS over (migration spec steps 2-4).
+*   [admin/README.md](admin/README.md) - The administration app: creating the `admins` Cognito group, the IAM it needs, and what can and cannot be known about who uploaded a given CAD file.

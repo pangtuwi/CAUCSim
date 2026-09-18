@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>CAUCSim Admin</title>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- Sign-in ---------------------------------------------------------- -->
+  <div class="auth" id="auth">
+    <div class="auth-card">
+      <h1>CAUCSim Admin</h1>
+      <p class="subtitle" id="auth-subtitle">Sign in with your CAUCSim account.</p>
+
+      <form id="signin-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required>
+        </div>
+        <div class="field" id="new-password-field" hidden>
+          <label for="new-password">New password</label>
+          <input type="password" id="new-password" autocomplete="new-password">
+          <p class="hint">Your temporary password has expired. Set a permanent one to continue.</p>
+        </div>
+        <div class="notice notice-danger" id="auth-error" hidden></div>
+        <button type="submit" class="btn-primary btn-block" id="signin-button">Sign in</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Not an admin ------------------------------------------------------ -->
+  <div class="auth" id="denied" hidden>
+    <div class="auth-card">
+      <h1>Not an administrator</h1>
+      <p class="subtitle" id="denied-message"></p>
+      <div class="notice">
+        <h4>If you have just been added to the group</h4>
+        <p>
+          Group membership is written into your token when you sign in, so a
+          token issued beforehand will keep being refused. Sign out and back in.
+        </p>
+      </div>
+      <button class="btn-block" id="denied-signout">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Admin shell ------------------------------------------------------- -->
+  <div class="shell" id="shell" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>CAUCSim Admin</strong>
+        <span id="brand-env">—</span>
+      </div>
+      <nav class="nav" id="nav">
+        <button data-view="simulations" aria-current="page">
+          Simulations <span class="count" id="count-simulations"></span>
+        </button>
+        <button data-view="files">
+          CAD files <span class="count" id="count-files"></span>
+        </button>
+        <button data-view="users">
+          Users <span class="count" id="count-users"></span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="who" id="who">—</span>
+        <button class="btn-sm" id="signout">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main" id="main"></main>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -3,7 +3,16 @@
     "start": "node backend/app/app.js",
     "dev": "node --watch backend/app/app.js",
     "test": "jest",
+    "admin": "npm start --prefix admin",
+    "admin:test": "npm test --prefix admin",
     "upload-template": "node scripts/upload-template.js"
+  },
+  "jest": {
+    "//": "admin/ is a separate app with its own package.json and node_modules. Its tests resolve the AWS SDK from admin/node_modules, so they must run under admin's own jest (npm run admin:test), not this one.",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/admin/"
+    ]
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
