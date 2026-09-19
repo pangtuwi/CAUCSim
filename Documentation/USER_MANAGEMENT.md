@@ -31,10 +31,18 @@ what they are.
   `NEW_PASSWORD_REQUIRED` challenge, and the login panel swaps in a **New
   Password** field to complete it. This is the normal, expected first-run flow —
   no extra work is needed on your side.
-* **Every account has the same privileges.** The backend
+* **Every account has the same privileges in the CFD app.** The backend
   (`backend/app/app.js`) verifies the Cognito **ID token** and then allows the
-  request. There are no groups, roles, or per-user restrictions. *Adding a user
+  request. There are no roles or per-user restrictions there. *Adding a user
   grants full access to uploads, simulations, and results.*
+* **One group exists, and it only affects the admin app.** Members of the
+  `admins` group can sign in to the separate administration app (`admin/`),
+  which lists every account, and can view, download and permanently delete any
+  user's simulations and CAD files. Membership changes nothing about the CFD app
+  itself. See [admin/README.md](../admin/README.md) for how to create the group
+  and add someone to it, and note that group membership is written into the ID
+  token at sign-in — a person added to the group must sign out and back in
+  before it takes effect.
 * **The `email` attribute matters.** The backend reads the `email` claim from
   the ID token into `req.user.email`, so always set the email attribute on the
   account (§4/§5 do this).
@@ -244,7 +252,21 @@ expires.
 
 Their uploaded CAD files and results remain in the S3 bucket
 (`cauc-cfd-storage-bucket-247638741223-eu-west-2-an`) and must be removed
-separately if that is required.
+separately if that is required. The admin app (`admin/`) is the easiest way to
+do that: their simulations are listed under their email address, and it shows
+which CAD files they uploaded or simulated. Note that deleting the account first
+means their runs show up under "Deleted / unknown user" rather than their
+address, so remove the data first if you want it easy to find.
+
+If the person was in the `admins` group, remove them from it as well — deleting
+or disabling the account does that implicitly, but an existing ID token keeps
+working until it expires (one hour):
+
+```bash
+aws cognito-idp admin-remove-user-from-group \
+  --region eu-west-2 --user-pool-id eu-west-2_ft1OVuuU1 \
+  --username 'former.person@example.com' --group-name admins
+```
 
 ---
 

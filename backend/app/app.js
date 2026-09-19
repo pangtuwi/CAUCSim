@@ -141,6 +141,40 @@ app.post('/api/get-upload-url', requireAuth, async (req, res) => {
     });
     const viewUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
 
+    // Record who this upload belongs to.
+    //
+    // The object itself carries no identity: the browser PUTs straight to S3,
+    // so the only principal S3 ever sees is this Lambda's role. Without this
+    // sidecar there is nothing anywhere that says whose file a given .stl is,
+    // which is what the admin app needs.
+    //
+    // A separate prefix, not "uploads/<key>.meta.json", so these records can
+    // never interact with the .stl filter or the originalName reconstruction in
+    // GET /api/files below.
+    //
+    // Written when the URL is signed rather than when the upload completes —
+    // there is no completion callback to hang it off — so cancelling the file
+    // picker leaves a record with no object. The admin app reconciles those
+    // against the real listing and reports them as harmless.
+    try {
+      await s3Client.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: `uploads-meta/${uniqueKey}.json`,
+        Body: JSON.stringify({
+          fileKey: s3Key,
+          originalName: filename,
+          userSub: req.user.sub,
+          userEmail: req.user.email,
+          requestedAt: new Date().toISOString()
+        }),
+        ContentType: 'application/json'
+      }));
+    } catch (metaErr) {
+      // Never fail an upload over bookkeeping. The file still uploads; the
+      // admin app falls back to inferring ownership from simulation records.
+      console.error("Failed to write upload metadata:", metaErr);
+    }
+
     res.json({ uploadUrl, viewUrl, fileKey: s3Key });
   } catch (err) {
     console.error("S3 Signing Error:", err);
@@ -211,6 +245,19 @@ app.delete('/api/files/*fileKey', requireAuth, async (req, res) => {
       Key: normalizedFileKey
     });
     await s3Client.send(deleteCommand);
+
+    // Take the ownership record with it. Best effort: S3 deletes are idempotent
+    // so a file that predates the sidecars needs no existence check, and a
+    // failure here must not turn a successful delete into an error.
+    try {
+      await s3Client.send(new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: `uploads-meta/${normalizedFileKey.slice('uploads/'.length)}.json`
+      }));
+    } catch (metaErr) {
+      console.error("Failed to delete upload metadata:", metaErr);
+    }
+
     res.json({ message: 'S3 object deleted successfully' });
   } catch (err) {
     console.error("S3 Delete Error:", err);

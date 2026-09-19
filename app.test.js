@@ -203,6 +203,68 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       expect(response.body).toHaveProperty('fileKey');
       expect(response.body.uploadUrl).toContain('https://mock-s3-presigned-url.com/uploads/');
     });
+
+    // The object itself carries no identity — the browser PUTs straight to S3,
+    // so the only principal S3 sees is this Lambda's role. Without this record
+    // there is nothing anywhere saying whose .stl a given upload is, which is
+    // what the admin app reads.
+    it('should record who the upload belongs to', async () => {
+      const response = await request(app)
+        .post('/api/get-upload-url')
+        .set('Authorization', authHeaderValue)
+        .send({ filename: 'test-car.stl', fileType: 'model/stl' });
+
+      const uniqueKey = response.body.fileKey.replace('uploads/', '');
+      const metaKey = `uploads-meta/${uniqueKey}.json`;
+      expect(mockInMemoryS3[metaKey]).toBeDefined();
+
+      const record = JSON.parse(mockInMemoryS3[metaKey].toString());
+      expect(record).toMatchObject({
+        fileKey: response.body.fileKey,
+        originalName: 'test-car.stl'
+      });
+      expect(record.userEmail).toBeTruthy();
+      expect(record.requestedAt).toBeTruthy();
+    });
+
+    // The metadata is bookkeeping for the admin app. If it fails, the upload
+    // must still go ahead — the admin app falls back to inferring ownership.
+    it('should still return upload URLs if the metadata write fails', async () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const s3 = require('@aws-sdk/client-s3');
+      const original = s3.PutObjectCommand;
+      // Only the metadata write uses PutObjectCommand on this path.
+      s3.PutObjectCommand = function FailingPutObjectCommand(input) {
+        if (String(input.Key).startsWith('uploads-meta/')) throw new Error('S3 unavailable');
+        return new original(input);
+      };
+
+      try {
+        const response = await request(app)
+          .post('/api/get-upload-url')
+          .set('Authorization', authHeaderValue)
+          .send({ filename: 'resilient.stl', fileType: 'model/stl' });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('uploadUrl');
+      } finally {
+        s3.PutObjectCommand = original;
+        spy.mockRestore();
+      }
+    });
+
+    it('should keep upload records out of the geometry library listing', async () => {
+      await request(app)
+        .post('/api/get-upload-url')
+        .set('Authorization', authHeaderValue)
+        .send({ filename: 'listed.stl', fileType: 'model/stl' });
+      // The upload itself never happened, so only the record exists.
+      const response = await request(app).get('/api/files').set('Authorization', authHeaderValue);
+
+      expect(response.status).toBe(200);
+      expect(response.body.every((file) => file.fileKey.startsWith('uploads/'))).toBe(true);
+      expect(JSON.stringify(response.body)).not.toContain('uploads-meta');
+    });
   });
 
   describe('GET /api/files', () => {
