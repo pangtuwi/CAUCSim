@@ -87,16 +87,30 @@ describe('GET /api/admin/uploads', () => {
     expect(res.body.files[0].attribution).toBe('orphaned');
     expect(res.body.files[0].uploader).toBeNull();
     expect(res.body.files[0].usedBy).toEqual([]);
-    expect(res.body.orphanedCount).toBe(1);
-    expect(res.body.orphanedBytes).toBe('solid'.length);
+    expect(res.body.unusedCount).toBe(1);
+    expect(res.body.unusedBytes).toBe('solid'.length);
   });
 
-  it('filters to orphaned files on request', async () => {
+  // The cleanup list is about references, not attribution: a recorded upload
+  // that nothing has simulated is just as reclaimable as an orphaned one.
+  it('counts a recorded-but-never-simulated upload as unused', async () => {
+    support.putObject(CAR, 'solid');
+    support.putObject(metaKeyFor(CAR), {
+      fileKey: CAR, originalName: 'car.stl', userSub: 'user-sub-1', userEmail: 'one@example.com'
+    });
+
+    const res = await get('/api/admin/uploads');
+    expect(res.body.files[0].attribution).toBe('uploaded-by');
+    expect(res.body.unusedCount).toBe(1);
+    expect(res.body.unusedBytes).toBe('solid'.length);
+  });
+
+  it('filters to unused files on request', async () => {
     support.putObject(CAR, 'solid');
     support.putObject(WING, 'solid');
     support.putJob(support.makeJob({ jobId: 'job-1700000000001-aaaaaaaa', fileKey: WING }));
 
-    const res = await get('/api/admin/uploads?orphaned=1');
+    const res = await get('/api/admin/uploads?unused=1');
     expect(res.body.files).toHaveLength(1);
     expect(res.body.files[0].fileKey).toBe(CAR);
     expect(res.body.total).toBe(2);

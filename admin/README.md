@@ -5,8 +5,8 @@ simulation anyone has run, and every `.stl` in the bucket — with download and
 delete for both.
 
 It exists because the CFD app deliberately cannot show you this. `GET /api/jobs`
-filters to `jobData.userSub === req.user.sub`, so no account — including yours —
-can see anyone else's runs. Until now the only way to see the whole picture was
+hides any run whose `jobData.userSub` is someone else's, so no account —
+including yours — can see another user's runs. Until now the only way to see the whole picture was
 the S3 console.
 
 Runs locally on **port 3001** against real AWS. It exports a `serverless-http`
@@ -121,9 +121,9 @@ That last row is a real limit, not a loading failure. S3 access logging and
 CloudTrail don't help — they record the Lambda's role, not the person. The
 `uploads-meta/` records fix it going forward only.
 
-Files in that last state are also the most useful thing on the page: nothing
-references them, so the "never simulated only" filter and the reclaimable-bytes
-figure are your cleanup list.
+Separately from attribution, the "never simulated only" filter and the
+reclaimable-bytes figure list every file no run references — whichever of the
+three states it is in. That is your cleanup list.
 
 Two reconciliation sections appear when relevant: runs referencing geometry that
 is no longer in the bucket, and upload records whose upload never completed
@@ -146,9 +146,14 @@ stay in the AWS CLI — see [USER_MANAGEMENT.md](../Documentation/USER_MANAGEMEN
 There is no `AdminDeleteUser` code path here at all, so no bug in this app can
 destroy an account.
 
-Simulations whose owner has been deleted from the pool are gathered into one
-"Deleted / unknown user" row, so the counts here reconcile with the simulations
-page instead of quietly disagreeing.
+Simulations that no account claims are gathered into synthetic rows so the
+counts here reconcile with the simulations page instead of quietly disagreeing.
+There are two, because they mean different things: **Deleted user** holds runs
+whose `userSub`/`userEmail` matches nobody in the pool; **No user recorded**
+holds runs written before the CFD app captured identity in `job.json` at all
+(September 2026). Note that the CFD app's ownership filter only applies when
+`userSub` is present, so that second bucket is visible to every signed-in user
+in the CFD app.
 
 ---
 

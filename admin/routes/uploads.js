@@ -13,15 +13,19 @@ router.get('/uploads', async (req, res, next) => {
     const snapshot = await scanJobs({ refresh: req.query.refresh === '1' });
     const { files, missing, stale } = await buildUploads(snapshot);
 
-    const orphaned = files.filter((f) => f.attribution === 'orphaned');
-    const shown = req.query.orphaned === '1' ? orphaned : files;
+    // "Unused" is about references, not attribution: a file no run points at
+    // is reclaimable whether or not an upload record says who put it there.
+    // Keying this on attribution === 'orphaned' would make the cleanup list
+    // stop growing the moment every new upload carries a sidecar.
+    const unused = files.filter((f) => f.runCount === 0);
+    const shown = req.query.unused === '1' ? unused : files;
 
     res.json({
       files: shown,
       total: files.length,
       shown: shown.length,
-      orphanedCount: orphaned.length,
-      orphanedBytes: orphaned.reduce((total, f) => total + f.size, 0),
+      unusedCount: unused.length,
+      unusedBytes: unused.reduce((total, f) => total + f.size, 0),
       totalBytes: files.reduce((total, f) => total + f.size, 0),
       missing,
       stale,

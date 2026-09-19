@@ -46,6 +46,31 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
   return payload;
 }
 
+/**
+ * Fetch a raw response body (a file, a log) with the bearer token attached.
+ *
+ * This exists because the API is protected by a header, not a cookie: a plain
+ * navigation or window.open() to an /api/admin URL carries no token and gets a
+ * 401. Anything served by the API itself — as opposed to a presigned S3 URL —
+ * has to be fetched from script and handed to the browser as a Blob.
+ */
+export async function apiBlob(path) {
+  const response = await fetch(`/api/admin${path}`, {
+    headers: { Authorization: `Bearer ${getToken() || ''}` }
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) onUnauthenticated();
+    if (response.status === 403) onForbidden(payload.error);
+    throw new ApiError(payload.error || `Request failed (${response.status})`, response.status, payload);
+  }
+
+  const disposition = response.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  return { blob: await response.blob(), filename: match ? match[1] : null };
+}
+
 /** The unauthenticated bootstrap endpoint. */
 export async function fetchStatus() {
   const response = await fetch('/api/admin/status');

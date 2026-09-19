@@ -124,6 +124,33 @@ describe('GET /api/admin/users', () => {
     expect(synthetic.state).toBe('unknown-account');
   });
 
+  // Runs written before job.json carried userSub/userEmail are a different
+  // case from a deleted account, and must not be described as one.
+  it('separates jobs with no recorded user from jobs whose owner was deleted', async () => {
+    support.state.users = [support.makeCognitoUser({ sub: 'user-sub-1', email: 'one@example.com' })];
+    support.putJob(support.makeJob({
+      jobId: 'job-1700000000001-aaaaaaaa', userSub: 'gone-sub', userEmail: 'gone@example.com'
+    }));
+    const legacy = support.makeJob({ jobId: 'job-1700000000002-bbbbbbbb' });
+    delete legacy.userSub;
+    delete legacy.userEmail;
+    support.putJob(legacy);
+    const legacy2 = support.makeJob({ jobId: 'job-1700000000003-cccccccc' });
+    delete legacy2.userSub;
+    delete legacy2.userEmail;
+    support.putJob(legacy2);
+
+    const res = await get('/api/admin/users');
+    const deleted = res.body.users.find((user) => user.state === 'unknown-account');
+    const noUser = res.body.users.find((user) => user.state === 'no-user');
+    expect(deleted.simulationCount).toBe(1);
+    expect(noUser.simulationCount).toBe(2);
+    expect(noUser.synthetic).toBe(true);
+    // Every job on the simulations page is accounted for on this one.
+    const total = res.body.users.reduce((sum, user) => sum + user.simulationCount, 0);
+    expect(total).toBe(3);
+  });
+
   it('counts only enabled+confirmed accounts as active', async () => {
     support.state.users = [
       support.makeCognitoUser({ sub: 'sub-1', email: 'one@example.com' }),

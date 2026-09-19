@@ -13,7 +13,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "admin"],
       "port": 3001,
-      "autoPort": true
+      "autoPort": false
     }
   ]
 }

@@ -76,11 +76,22 @@ function draw() {
     ['Admins', users.filter((u) => u.isAdmin).length]
   ]));
 
-  const orphan = users.find((u) => u.synthetic);
-  if (orphan) {
+  const deleted = users.find((u) => u.state === 'unknown-account');
+  if (deleted) {
     container.append(el('div', { class: 'notice notice-warn' }, [
-      el('h4', { text: `${orphan.simulationCount} simulations belong to no current account` }),
-      el('p', { text: 'Their owner has been deleted from the pool. The data is still in the bucket.' })
+      el('h4', { text: `${deleted.simulationCount} simulation${deleted.simulationCount === 1 ? '' : 's'} belong to a deleted account` }),
+      el('p', { text: 'Their owner has been removed from the pool. The data is still in the bucket.' })
+    ]));
+  }
+
+  const noUser = users.find((u) => u.state === 'no-user');
+  if (noUser) {
+    container.append(el('div', { class: 'notice' }, [
+      el('h4', { text: `${noUser.simulationCount} simulation${noUser.simulationCount === 1 ? '' : 's'} record no user at all` }),
+      el('p', {
+        text: 'These predate the CFD app writing userSub and userEmail into job.json, so the owner '
+          + 'was never captured. The CFD app shows these runs to every signed-in user.'
+      })
     ]));
   }
 
@@ -154,7 +165,7 @@ function columns() {
 function openUser(user) {
   openDrawer({
     title: user.email,
-    subtitle: user.synthetic ? 'Not a current Cognito account' : user.state,
+    subtitle: user.synthetic ? 'Not a Cognito account — a bucket of unclaimed runs' : user.state,
     body: [
       section('Account', kv([
         ['State', userStatePill(user.state)],

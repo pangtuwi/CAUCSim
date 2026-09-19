@@ -125,28 +125,45 @@ function enrichWithJobs(users, snapshot) {
     return { ...user, ...summariseJobs(jobs) };
   });
 
-  // Jobs belonging to nobody in the pool (the account was deleted) would
-  // otherwise be invisible on this page. Surface them as one synthetic row so
-  // the counts here reconcile with the simulations view.
-  const orphanJobs = snapshot.jobs.filter((job) => !claimedJobIds.has(job.jobId));
-  if (orphanJobs.length > 0) {
-    enriched.push({
-      sub: null,
-      email: 'Deleted / unknown user',
-      emailVerified: false,
-      username: null,
-      enabled: false,
-      status: null,
-      state: 'unknown-account',
-      isAdmin: false,
-      createdAt: null,
-      modifiedAt: null,
-      synthetic: true,
-      ...summariseJobs(orphanJobs)
-    });
+  // Jobs claimed by nobody in the pool would otherwise be invisible on this
+  // page. There are two distinct reasons a job ends up here, and they are
+  // surfaced as separate rows because they mean different things:
+  //
+  //  - the job names a user (sub or email) that no longer exists in the pool:
+  //    the account was deleted.
+  //  - the job names no user at all: it predates identity capture in job.json
+  //    (userSub/userEmail were first written in September 2026). Note the CFD
+  //    app shows these runs to *every* signed-in user — its ownership filter
+  //    only applies when userSub is present.
+  const unclaimed = snapshot.jobs.filter((job) => !claimedJobIds.has(job.jobId));
+  const deletedOwner = unclaimed.filter((job) => job.userSub || job.userEmail);
+  const noOwner = unclaimed.filter((job) => !job.userSub && !job.userEmail);
+
+  if (deletedOwner.length > 0) {
+    enriched.push(syntheticRow('Deleted user', 'unknown-account', deletedOwner));
+  }
+  if (noOwner.length > 0) {
+    enriched.push(syntheticRow('No user recorded', 'no-user', noOwner));
   }
 
   return enriched;
+}
+
+function syntheticRow(email, state, jobs) {
+  return {
+    sub: null,
+    email,
+    emailVerified: false,
+    username: null,
+    enabled: false,
+    status: null,
+    state,
+    isAdmin: false,
+    createdAt: null,
+    modifiedAt: null,
+    synthetic: true,
+    ...summariseJobs(jobs)
+  };
 }
 
 function summariseJobs(jobs) {

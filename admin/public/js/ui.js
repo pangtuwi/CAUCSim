@@ -109,7 +109,8 @@ const USER_STATE_PILLS = {
   invited: 'pill-warn',
   disabled: 'pill-danger',
   'reset-required': 'pill-warn',
-  'unknown-account': 'pill-danger'
+  'unknown-account': 'pill-danger',
+  'no-user': 'pill-warn'
 };
 
 const USER_STATE_LABELS = {
@@ -117,7 +118,8 @@ const USER_STATE_LABELS = {
   invited: 'Invited',
   disabled: 'Disabled',
   'reset-required': 'Reset required',
-  'unknown-account': 'No account'
+  'unknown-account': 'No account',
+  'no-user': 'No user recorded'
 };
 
 export const userStatePill = (state) =>

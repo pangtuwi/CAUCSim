@@ -180,8 +180,9 @@ router.delete('/jobs/:jobId', async (req, res, next) => {
         details: { reason: 'job-in-flight', status: job.status, dropletId: job.dropletId || null },
         req
       });
+      const droplet = job.dropletId ? `droplet ${job.dropletId}` : 'its droplet';
       return res.status(409).json({
-        error: `This run is ${job.status}. Stop it in the CFD app before deleting it, or the droplet keeps running and rewrites these files.`,
+        error: `This run is ${job.status} on ${droplet}. Stop it in the CFD app before deleting it, or the droplet keeps running and rewrites these files.`,
         code: 'job-in-flight',
         reason: 'job-in-flight',
         status: job.status,

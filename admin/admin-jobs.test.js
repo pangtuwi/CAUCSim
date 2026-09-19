@@ -220,6 +220,8 @@ describe('DELETE /api/admin/jobs/:jobId', () => {
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('job-in-flight');
     expect(res.body.dropletId).toBe(98765);
+    // The message itself names the droplet, so a toast is enough to act on.
+    expect(res.body.error).toContain('droplet 98765');
     expect(support.has(`results/${JOB_ID}/job.json`)).toBe(true);
   });
 

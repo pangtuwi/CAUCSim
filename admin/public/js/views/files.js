@@ -6,7 +6,7 @@ import {
   copyable, confirmByTyping
 } from '../ui.js';
 
-const state = { search: '', orphanedOnly: false, sort: 'uploaded', order: 'desc', data: null };
+const state = { search: '', unusedOnly: false, sort: 'uploaded', order: 'desc', data: null };
 
 let container = null;
 let onCountChange = () => {};
@@ -37,7 +37,7 @@ export async function render({ refresh = false } = {}) {
 function visibleFiles() {
   const needle = state.search.trim().toLowerCase();
   const filtered = state.data.files.filter((file) => {
-    if (state.orphanedOnly && file.attribution !== 'orphaned') return false;
+    if (state.unusedOnly && file.runCount > 0) return false;
     if (!needle) return true;
     const owners = [...(file.usedBy || []).map((u) => u.email), file.uploader?.email].filter(Boolean);
     return [file.originalName, file.fileKey, ...owners].join(' ').toLowerCase().includes(needle);
@@ -54,7 +54,7 @@ function visibleFiles() {
 }
 
 function draw() {
-  const { files, missing, stale, orphanedCount, orphanedBytes, totalBytes, scannedAt } = state.data;
+  const { files, missing, stale, unusedCount, unusedBytes, totalBytes, scannedAt } = state.data;
   const rows = visibleFiles();
 
   clear(container);
@@ -69,8 +69,8 @@ function draw() {
   container.append(stats([
     ['Files', files.length],
     ['Stored', bytes(totalBytes)],
-    ['Never simulated', orphanedCount],
-    ['Reclaimable', bytes(orphanedBytes)]
+    ['Never simulated', unusedCount],
+    ['Reclaimable', bytes(unusedBytes)]
   ]));
 
   if (missing.length > 0) {
@@ -102,9 +102,9 @@ function draw() {
     el('label', { class: 'muted' }, [
       el('input', {
         type: 'checkbox',
-        checked: state.orphanedOnly,
+        checked: state.unusedOnly,
         style: 'width:auto;margin-right:6px;vertical-align:middle',
-        onChange: (event) => { state.orphanedOnly = event.target.checked; draw(); }
+        onChange: (event) => { state.unusedOnly = event.target.checked; draw(); }
       }),
       'Never simulated only'
     ]),

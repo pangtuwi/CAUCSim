@@ -1,5 +1,5 @@
 // Every simulation in the bucket, from every account.
-import { api, ApiError } from '../api.js';
+import { api, apiBlob, ApiError } from '../api.js';
 import {
   el, clear, table, pageHead, stats, loading, errorNotice, toast,
   dateCell, absoluteDate, duration, bytes, number, statusPill,
@@ -253,7 +253,7 @@ async function openJob(job) {
       artifacts.some((a) => a.name === 'results.zip')
         && el('button', { class: 'btn-primary', type: 'button', onClick: () => downloadArtifact(full.jobId, 'results.zip') }, 'Download results.zip'),
       artifacts.some((a) => a.name === 'simulation.log')
-        && el('button', { type: 'button', onClick: () => window.open(`/api/admin/jobs/${full.jobId}/log`, '_blank') }, 'View log'),
+        && el('button', { type: 'button', onClick: () => viewLog(full.jobId) }, 'View log'),
       el('button', { type: 'button', onClick: () => downloadJobJson(full.jobId) }, 'Download job.json'),
       el('span', { class: 'spacer' }),
       el('button', { class: 'btn-danger', type: 'button', onClick: () => deleteJob(full, artifacts) }, 'Delete run')
@@ -272,11 +272,38 @@ async function downloadArtifact(jobId, file) {
   }
 }
 
-// job.json is served by the admin API rather than presigned, because a
-// presigned URL would hand out the raw S3 object — which still contains the
-// droplet's callback token. The API serves the stripped copy.
-function downloadJobJson(jobId) {
-  window.open(`/api/admin/jobs/${jobId}/job.json`, '_blank');
+// job.json and the log are served by the admin API rather than presigned —
+// job.json because a presigned URL would hand out the raw S3 object, which
+// still contains the droplet's callback token. The API needs the bearer token,
+// which a bare window.open() cannot carry, so both are fetched from script and
+// handed to the browser as a Blob.
+async function downloadJobJson(jobId) {
+  try {
+    const { blob, filename } = await apiBlob(`/jobs/${jobId}/job.json`);
+    saveBlob(blob, filename || `${jobId}-job.json`);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function viewLog(jobId) {
+  try {
+    const { blob } = await apiBlob(`/jobs/${jobId}/log`);
+    const url = URL.createObjectURL(blob.type.startsWith('text/plain') ? blob : new Blob([blob], { type: 'text/plain' }));
+    window.open(url, '_blank');
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = el('a', { href: url, download: filename });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoke after the click has been dispatched, not synchronously.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* --- Delete ------------------------------------------------------------- */
