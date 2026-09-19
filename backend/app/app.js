@@ -699,6 +699,15 @@ if [ -f postProcessing/forceCoeffs/0/forceCoeffs.dat ]; then
   aws s3 cp postProcessing/forceCoeffs/0/forceCoeffs.dat "s3://\$S3_BUCKET/results/\$JOB_ID/forceCoeffs.dat"
 fi
 
+# From here on, post-processing output is appended to simulation.log (rather
+# than falling through to the droplet's own stdout/cloud-init log, which
+# nothing in the app ever reads) so a pvpython/foamToVTK failure here shows
+# up in the "View Log" the frontend fetches, instead of just silently
+# disabling a visualisation toggle with no way to see why. simulation.log is
+# already being pushed to S3 every 5s by the background sync loop above, so
+# appending here is picked up automatically -- no separate upload needed.
+{
+
 # Generate surface pressure visualisation (Cp) on the car body patch (f24).
 # foamToVTK writes into a VTK/ directory whose exact filename varies by
 # OpenFOAM build, so search for it rather than hardcoding a path (same
@@ -795,6 +804,13 @@ if [ \${#RENDER_FLOW_ARGS[@]} -gt 0 ] && command -v pvpython >/dev/null 2>&1 && 
 else
   echo "==> Skipping 3D visualisation (no streamline tracks found, or pvpython/xvfb-run unavailable)."
 fi
+
+} >> simulation.log 2>&1
+
+# Re-upload now that the appended post-processing output above is in
+# simulation.log -- the copy already in S3 (from the "Uploading results to
+# S3" step) predates it, and completion is about to be reported.
+aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log"
 
 # The API server derives the reported coefficients from the forceCoeffs.dat
 # uploaded above, so the droplet does no post-processing of its own.

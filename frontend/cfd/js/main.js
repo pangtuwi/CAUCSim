@@ -3145,6 +3145,21 @@ async function fetchPressureModel(job) {
     loader.load(data.url, (gltf) => {
       if (requestToken !== pressureLoadToken) return;
       const pressureScene = gltf.scene;
+      // ParaView's GLTF export of this surface carries no NORMAL attribute,
+      // so three.js derives face orientation from triangle winding alone --
+      // and the f24 patch isn't one watertight shell but several disjoint
+      // pieces (body, wheels, roll hoop), each of which independently ends
+      // up "outward" or "inward" after the exporter's own consistency pass.
+      // Single-sided rendering then culls whichever pieces face the wrong
+      // way, so parts of the car look hollow/see-through and mis-colored
+      // from the true Cp of a back face's neighbor instead of its own.
+      // Rendering both sides sidesteps needing every piece correctly
+      // oriented at all.
+      pressureScene.traverse((obj) => {
+        if (obj.isMesh && obj.material) {
+          obj.material.side = THREE.DoubleSide;
+        }
+      });
       // ParaView exports in meters; the app's world units are millimeters (matches loadSTL's m->mm scaling)
       pressureScene.scale.set(1000, 1000, 1000);
       pressureScene.position.set(0, 0, 0);

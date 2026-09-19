@@ -26,8 +26,11 @@ async function run() {
 
   try {
     // Run zip command on the host (mac / linux)
-    // We navigate to the template directory and zip its contents
-    execSync(`zip -r "${zipPath}" .`, {
+    // We navigate to the template directory and zip its contents.
+    // zip doesn't respect .gitignore, so OS/editor and Python bytecode
+    // cruft (.DS_Store, __pycache__/) is excluded explicitly -- otherwise
+    // it rides along into case-template.zip and onto every job's droplet.
+    execSync(`zip -r "${zipPath}" . -x ".DS_Store" -x "*/.DS_Store" -x "__pycache__/*" -x "*.pyc"`, {
       cwd: templateDir,
       stdio: 'inherit'
     });

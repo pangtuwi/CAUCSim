@@ -14,10 +14,12 @@ import json
 import os
 import sys
 
-import numpy as np
-from paraview import servermanager
 from paraview.simple import *
-from vtk.numpy_interface import dataset_adapter as dsa
+
+# Fixed Cp color-scale bounds, chosen to match the range CAUCSim's own
+# ParaView-based review has used for this car (roughly stagnation to
+# suction-peak) so the legend stays comparable run-to-run.
+CP_COLOR_RANGE = (-1.1, 1.1)
 
 
 def main():
@@ -53,33 +55,25 @@ def main():
     calc.Function = f'p / (0.5*1*{uinf}*{uinf})'
     calc.UpdatePipeline()
 
-    # The raw min/max is not used for the color scale: a handful of
-    # numerically noisy cells (common on a non-converged solve, or just a
-    # sliver of a poor-quality cell at a sharp edge) can sit far outside the
-    # bulk of the surface's real Cp values, and a raw-range scale then
-    # compresses that entire bulk into a thin slice of the palette -- e.g. an
-    # observed case with 85% of the surface within one 10%-wide band of the
-    # 'Cool to Warm' preset, and visible blue nowhere at all, despite a
-    # legend claiming a wide, informative-looking range. Clipping to the
-    # 1st-99th percentile keeps a couple of outlier cells from dominating
-    # the legend and washing out real variation everywhere else; those
-    # outlier points still render, just clamped to the nearest scale end
-    # rather than getting their own color.
-    fetched = servermanager.Fetch(calc)
-    if fetched.IsA('vtkCompositeDataSet'):
-        it = fetched.NewIterator()
-        it.InitTraversal()
-        arrays = []
-        while not it.IsDoneWithTraversal():
-            block_cp = dsa.WrapDataObject(it.GetCurrentDataObject()).PointData['Cp']
-            if block_cp is not None:
-                arrays.append(np.asarray(block_cp))
-            it.GoToNextItem()
-        cp_values = np.concatenate(arrays)
-    else:
-        cp_values = np.asarray(dsa.WrapDataObject(fetched).PointData['Cp'])
-    cp_lo, cp_hi = np.percentile(cp_values, [1, 99])
-    cp_lo, cp_hi = float(cp_lo), float(cp_hi)
+    # snappyHexMesh's surface-snapped f24 patch doesn't always come out with
+    # consistent triangle winding, which makes some faces invisible from
+    # outside once loaded single-sided in the Three.js viewer -- those spots
+    # read as transparent holes that show whatever is behind them (often the
+    # inside of the car). Recomputing normals with consistent, outward
+    # orientation fixes the winding so every face renders from the outside.
+    normals = GenerateSurfaceNormals(Input=calc)
+    # Exposed GenerateSurfaceNormals properties vary across ParaView/VTK
+    # builds (this droplet's apt-packaged ParaView doesn't expose
+    # AutoOrientNormals, which other versions do) -- guard each one so an
+    # absent property is just skipped rather than raising AttributeError
+    # and aborting the whole render.
+    if hasattr(normals, 'Consistency'):
+        normals.Consistency = 1
+    if hasattr(normals, 'AutoOrientNormals'):
+        normals.AutoOrientNormals = 1
+    normals.UpdatePipeline()
+
+    cp_lo, cp_hi = CP_COLOR_RANGE
 
     view = CreateRenderView()
     view.ViewSize = [1280, 720]
@@ -88,15 +82,11 @@ def main():
     view.OrientationAxesVisibility = 0
 
     print("[INFO] Coloring surface by Cp...")
-    display = Show(calc, view)
+    display = Show(normals, view)
     ColorBy(display, ('POINTS', 'Cp'))
 
     cp_lut = GetColorTransferFunction('Cp')
-    # Cp is signed and diverging around 0 -- unlike render_flow.py's velocity
-    # magnitude (sequential, 'Rainbow Desaturated'), use a diverging preset.
-    cp_lut.ApplyPreset('Cool to Warm', True)
-    # Cp's range varies run-to-run (unlike U's fixed 0-30 m/s scale in
-    # render_flow.py), so rescale to the clipped data range just computed.
+    cp_lut.ApplyPreset('Turbo', True)
     cp_lut.RescaleTransferFunction(cp_lo, cp_hi)
     display.LookupTable = cp_lut
 
@@ -123,9 +113,6 @@ def main():
     print(f"[INFO] Exporting Cp-colored surface to GLTF: {gltf_path}")
     ExportView(gltf_path, view=view, InlineData=1)
 
-    # Written range matches what's actually on the color scale (the clipped
-    # 1st-99th percentile), not the raw min/max, so the legend never claims
-    # a range the model isn't actually showing.
     range_path = os.path.join(output_dir, 'pressure_range.json')
     with open(range_path, 'w') as f:
         json.dump({'cpMin': cp_lo, 'cpMax': cp_hi}, f)

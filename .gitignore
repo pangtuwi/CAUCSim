@@ -28,3 +28,7 @@ yarn-error.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Python bytecode cache (pvpython scripts under openfoam-template/)
+__pycache__/
+*.pyc

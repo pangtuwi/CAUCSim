@@ -915,7 +915,10 @@ body {
   width: 120px;
   height: 8px;
   border-radius: 4px;
-  background: linear-gradient(to right, #3b4cc0, #b40426);
+  /* Approximates ParaView's "Turbo" preset (render_pressure.py's Cp LUT) --
+     purely decorative, so this needs updating by hand if that preset ever
+     changes again; it isn't read from ParaView's actual LUT data. */
+  background: linear-gradient(to right, #30123b, #4145ab, #2782e4, #20bdd0, #5bd559, #a8dd35, #faaf39, #f36a2e, #7a0403);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
