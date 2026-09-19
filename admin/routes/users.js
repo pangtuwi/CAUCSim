@@ -20,6 +20,10 @@ router.get('/users', async (req, res, next) => {
     try {
       [rawUsers, adminUsernames] = await Promise.all([listAllUsers(), listAdminUsernames()]);
     } catch (err) {
+      // Always say what Cognito actually said: the JSON error below is a
+      // summary, and the IAM message names the exact action and principal.
+      console.error('Cognito listing failed:', err.name, err.message);
+
       // The rest of the app works without Cognito read permission, so degrade
       // this one view rather than failing the request outright.
       if (err.name === 'AccessDeniedException' || err.name === 'NotAuthorizedException') {
