@@ -68,6 +68,26 @@ describe('buildJobSummaryMarkdown', () => {
       expect(buildJobSummaryMarkdown(completedJob({ fastCheck: true })))
         .toContain('Fast check (coarse, 50 iterations)');
     });
+
+    // The size the car was actually solved at is part of reproducing the run:
+    // the same STL scaled differently gives entirely different coefficients.
+    it.each([
+      [1, 'metres (no scaling applied)'],
+      [0.01, 'centimetres (scaled by 0.01 to metres)'],
+      [0.001, 'millimetres (scaled by 0.001 to metres)'],
+      [0.0254, 'inches (scaled by 0.0254 to metres)']
+    ])('records a scale of %p as %s', (modelScaleToMetres, expected) => {
+      expect(buildJobSummaryMarkdown(completedJob({ modelScaleToMetres })))
+        .toContain(expected);
+    });
+
+    // Runs from before the geometry was scaled to metres carry no factor, and
+    // claiming metres for them would assert something we do not know.
+    it('does not guess the units for a run that predates the field', () => {
+      const md = buildJobSummaryMarkdown(completedJob());
+
+      expect(md).toContain('| Model units | not recorded |');
+    });
   });
 
   describe('coefficients', () => {

@@ -42,6 +42,23 @@ let currentMomentCentreX = 0;
 let activeStage = 1;
 let unlockedStages = new Set([1]);
 
+// Metres per unit of the Model Units selector. The viewer works in mm and the
+// OpenFOAM case in metres, so one map serves both: x1000 for the viewer's world
+// units, and sent as-is with the job so the droplet can scale the STL to metres.
+const UNIT_TO_METRES = { m: 1, cm: 0.01, mm: 0.001, in: 0.0254 };
+
+// Falls back to metres for an unrecognised value so a stale or tampered-with
+// selector can never pick a scale the backend would reject.
+function readModelUnit() {
+  const unitSelect = document.getElementById('unit-select');
+  const unit = unitSelect ? unitSelect.value : 'm';
+  return UNIT_TO_METRES[unit] !== undefined ? unit : 'm';
+}
+
+function modelScaleToMetres() {
+  return UNIT_TO_METRES[readModelUnit()];
+}
+
 const MPH_TO_MS = 0.44704;
 const DEFAULT_RACE_SPEED_MPH = 30;
 let raceSpeedMph = DEFAULT_RACE_SPEED_MPH;
@@ -825,23 +842,10 @@ function loadSTL(originalName, viewUrl, fileKey) {
   loader.load(
     viewUrl,
     (geometry) => {
-      // Calculate unit scaling if necessary (Auto-detect or manual Meter scaling)
-      geometry.computeBoundingBox();
-      const tempSize = new THREE.Vector3();
-      geometry.boundingBox.getSize(tempSize);
-      const maxDimUnit = Math.max(tempSize.x, tempSize.y, tempSize.z);
-
-      const unitSelect = document.getElementById('unit-select');
-      const selectedUnit = unitSelect ? unitSelect.value : 'm';
-      let scaleFactor = 1.0;
-
-      if (selectedUnit === 'm' || selectedUnit === 'auto') {
-        scaleFactor = 1000.0;
-      } else if (selectedUnit === 'cm') {
-        scaleFactor = 10.0;
-      } else if (selectedUnit === 'in') {
-        scaleFactor = 25.4;
-      }
+      // Normalise the model into the viewer's mm world units. The same factor
+      // (before the x1000) is sent with the job so the OpenFOAM case, which is
+      // in metres, meshes the car at the size the viewer is showing.
+      const scaleFactor = modelScaleToMetres() * 1000;
 
       if (scaleFactor !== 1.0) {
         geometry.scale(scaleFactor, scaleFactor, scaleFactor);
@@ -1078,26 +1082,21 @@ function computeStats(geometry, size) {
     regHei.className = 'reg-item fail';
   }
 
-  // CFD Scale Check (Meters)
-  const unitSelect = document.getElementById('unit-select');
-  const selectedUnit = unitSelect ? unitSelect.value : 'm';
-  
+  // Size check. The geometry is scaled to metres for the solver now, so any
+  // unit in the selector is fine -- what still matters is whether the car comes
+  // out a believable size once that unit is taken at its word, which is what
+  // catches a file whose units are labelled wrongly. l/w/h are viewer mm here.
+  const unitNames = { m: 'metres', cm: 'centimetres', mm: 'millimetres', in: 'inches' };
+  const selectedUnit = readModelUnit();
+
   let scaleStatus = 'pass';
-  let scaleReason = 'Pass';
-  
-  if (selectedUnit !== 'm') {
+  let scaleReason = `Pass - read as ${unitNames[selectedUnit]}`;
+
+  if (l > 10000 || w > 10000 || h > 10000) {
     scaleStatus = 'fail';
-    scaleReason = `Warning: Model unit is ${selectedUnit.toUpperCase()}. CFD solver requires model to be in meters.`;
-  } else {
-    // If unit is meters, check if dimensions look like mm (e.g. length > 10m)
-    if (l > 10000 || w > 10000 || h > 10000) {
-      scaleStatus = 'fail';
-      scaleReason = 'Warning: Model dimensions look too large. Raw STL coordinates are likely in millimeters instead of meters.';
-    } else {
-      scaleReason = 'Pass (Verified)';
-    }
+    scaleReason = `Your car comes out ${(l / 1000).toFixed(1)} m long, which is far too big for an F24 car. Check the Model Units setting matches how your CAD program saved the file.`;
   }
-  
+
   if (regCfdScale && regCfdScaleVal) {
     regCfdScaleVal.textContent = scaleReason;
     if (scaleStatus === 'pass') {
@@ -2382,6 +2381,7 @@ async function startCfdSimulation() {
         raceSpeedMph: raceSpeedMph,
         wheelbase: readWheelbase(),
         momentCentreX: currentMomentCentreX,
+        modelScaleToMetres: modelScaleToMetres(),
         fastCheck: fastCheckInput ? fastCheckInput.checked : false,
         runName: document.getElementById('run-name-input')?.value || '',
         purpose: document.getElementById('run-purpose-input')?.value || ''
