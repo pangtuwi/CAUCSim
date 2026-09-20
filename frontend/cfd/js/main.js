@@ -674,6 +674,39 @@ function initResizablePanels() {
   setupResizeGutter('gutter-display-results', 'results', -1, widths);
 }
 
+// OrbitControls scales each zoom step by the magnitude of the wheel event's
+// deltaY, and r160 additionally divides it by devicePixelRatio:
+//
+//   Math.pow(0.95, zoomSpeed * Math.abs(delta) / (100 * (devicePixelRatio | 0)))
+//
+// A mouse wheel notch delivers deltaY ~100, but a trackpad pinch delivers
+// roughly 1-10 -- so the same gesture zooms about 50x less, and on a Retina
+// screen the devicePixelRatio term halves it again. At the default zoomSpeed
+// of 1 a pinch moves the camera ~0.05% per event, which is why zooming in on
+// a trackpad took many repeated gestures.
+//
+// Raising zoomSpeed globally cannot fix this: a value large enough for the
+// trackpad makes a single wheel notch jump ~40%. So the speed is chosen per
+// event instead, from what the event looks like it came from.
+const TRACKPAD_ZOOM_BOOST = 30;
+// A real wheel notch is ~100 (and 120 on some Windows mice); trackpad scroll
+// and pinch sit well below this.
+const WHEEL_NOTCH_MIN_DELTA = 50;
+
+function wheelZoomSpeed(event, devicePixelRatio) {
+  // Browsers report a pinch-zoom gesture as a wheel event with ctrlKey set.
+  // The delta test additionally catches two-finger scroll, which OrbitControls
+  // also treats as zoom. Both are boosted; a genuine wheel notch is not.
+  const isTrackpad = event.ctrlKey === true ||
+    (event.deltaMode === 0 && Math.abs(event.deltaY) < WHEEL_NOTCH_MIN_DELTA);
+  // Cancel the devicePixelRatio term so the zoom rate is the same on a Retina
+  // screen as on a 1x one. Clamped to 1 because a browser zoomed below 100%
+  // reports a fractional ratio, which truncates to 0 and would otherwise stop
+  // zooming altogether.
+  const dprTerm = Math.max(1, devicePixelRatio | 0);
+  return (isTrackpad ? TRACKPAD_ZOOM_BOOST : 1) * dprTerm;
+}
+
 function initThree() {
   const width = viewportContainer.clientWidth;
   const height = viewportContainer.clientHeight;
@@ -708,6 +741,14 @@ function initThree() {
   controls.maxPolarAngle = Math.PI / 2 + 0.1; // Limit panning below ground slightly
   controls.minDistance = 50;
   controls.maxDistance = 15000;
+
+  // Capture phase, so the speed for this event is in place before
+  // OrbitControls' own wheel listener (bubble phase, same element) reads it.
+  // Passive: this only sets a property, and leaves the preventDefault to
+  // OrbitControls.
+  renderer.domElement.addEventListener('wheel', (event) => {
+    controls.zoomSpeed = wheelZoomSpeed(event, window.devicePixelRatio);
+  }, { capture: true, passive: true });
 
   // Lights
   const ambientLight = new THREE.AmbientLight(0x1d283d, 1.2);
