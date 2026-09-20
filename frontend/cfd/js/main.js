@@ -3274,9 +3274,93 @@ function renderResultBanner(m) {
   banner.style.display = 'block';
 }
 
+// Plain-English name for the factor the geometry was scaled by. The panel is
+// narrow, so this is the short form of what the downloadable summary spells out
+// in full ("millimetres (scaled by 0.001 to metres)") -- same unit, less room.
+const MODEL_SCALE_NAMES = {
+  1: 'metres',
+  0.01: 'centimetres',
+  0.001: 'millimetres',
+  0.0254: 'inches'
+};
+
+// The inputs a result cannot be interpreted or reproduced without. Mirrors the
+// "Simulation inputs" table in the downloadable summary (buildJobSummaryMarkdown
+// in backend/app/app.js) so the panel and the download never disagree.
+//
+// Returns [label, value] pairs rather than markup so it can be tested directly.
+// Anything a run predating a given field would not carry reads "not recorded",
+// because claiming a default there would assert something we do not know.
+function runProvenanceRows(job) {
+  const na = 'not recorded';
+  const num = (v, dp) => (typeof v === 'number' && isFinite(v) ? v.toFixed(dp) : null);
+  const withUnit = (v, dp, unit) => {
+    const formatted = num(v, dp);
+    return formatted === null ? na : `${formatted} ${unit}`;
+  };
+
+  const speedMph = job.raceSpeedMph || DEFAULT_RACE_SPEED_MPH;
+  // Aref as the solver reported it, falling back to what the client measured.
+  const area = (job.metrics && job.metrics.aref) || job.frontalArea;
+
+  return [
+    ['Model file', job.originalName || na],
+    ['Race speed', `${num(speedMph, 1)} mph (${num(speedMph * MPH_TO_MS, 2)} m/s)`],
+    ['Frontal area (Aref)', withUnit(area, 4, 'm²')],
+    ['Wheelbase (lRef)', withUnit(job.wheelbase, 3, 'm')],
+    ['Moment centre (CofR)', withUnit(job.momentCentreX, 3, 'm')],
+    ['Model units', MODEL_SCALE_NAMES[job.modelScaleToMetres] || na],
+    ['Mesh', job.fastCheck ? 'Fast check - coarse, 50 iterations' : 'Full - refined, 500 iterations'],
+    ['Finished', formatRunTimestamp(job.completedAt)],
+    ['Run ID', job.jobId || na]
+  ];
+}
+
+// Same format as the run history list, so a run reads the same in both places.
+function formatRunTimestamp(iso) {
+  if (!iso) return 'not recorded';
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return 'not recorded';
+  return date.toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+// Which run the figures below belong to. Without it the panel is a set of
+// numbers with nothing tying them to the car, the settings or the question the
+// pupil was asking -- and there is no way to tell two runs apart.
+function renderRunProvenance(job) {
+  const nameEl = document.getElementById('run-provenance-name');
+  const fileEl = document.getElementById('run-provenance-file');
+  const purposeEl = document.getElementById('run-provenance-purpose');
+  const inputsEl = document.getElementById('run-provenance-inputs');
+  if (!nameEl || !fileEl || !purposeEl || !inputsEl) return;
+
+  // textContent throughout: the run name, purpose and file name are all user
+  // input and must never be parsed as markup.
+  nameEl.textContent = job.runName || job.originalName || job.jobId || 'Untitled run';
+  fileEl.textContent = job.originalName || '';
+  purposeEl.textContent = job.purpose || '';
+  purposeEl.style.display = job.purpose ? 'block' : 'none';
+
+  inputsEl.replaceChildren();
+  for (const [label, value] of runProvenanceRows(job)) {
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    dt.style.cssText = 'color: var(--text-secondary); white-space: nowrap;';
+
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    dd.style.cssText = 'margin: 0; color: var(--text-primary); font-family: var(--font-mono); overflow-wrap: anywhere;';
+
+    inputsEl.append(dt, dd);
+  }
+}
+
 function displayCfdResults(job) {
   showCfdMonitor(false);
   showResultsSummary(true);
+  renderRunProvenance(job);
 
   if (job && job.jobId) {
     fetchFlowVisualisation(job.jobId);
