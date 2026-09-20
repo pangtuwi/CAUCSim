@@ -386,6 +386,78 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
       });
     });
 
+    // The viewer normalises the model to mm and derives Aref/lRef/CofR from it
+    // in metres, but the STL is uploaded raw. Without the unit factor reaching
+    // the case, a millimetre model was meshed 1000x oversized against correct
+    // reference values -- results wrong by orders of magnitude, and nothing in
+    // the UI said so.
+    describe('model unit scaling', () => {
+      // The cloud-init script handed to the droplet on creation.
+      const lastDropletUserData = () => {
+        const call = global.fetch.mock.calls
+          .filter(([url, options]) => url.includes('/v2/droplets') && options && options.method === 'POST')
+          .pop();
+        expect(call).toBeDefined();
+        return JSON.parse(call[1].body).user_data;
+      };
+
+      it.each([
+        ['millimetres', 0.001],
+        ['centimetres', 0.01],
+        ['inches', 0.0254]
+      ])('records the %s factor and scales the geometry on the droplet', async (_label, scale) => {
+        const state = await createJobWithState({ modelScaleToMetres: scale });
+        expect(state).toHaveProperty('modelScaleToMetres', scale);
+
+        const userData = lastDropletUserData();
+        expect(userData).toContain(`MODEL_SCALE="${scale}"`);
+        expect(userData).toContain('surfaceTransformPoints');
+      });
+
+      // The case is already in metres, so scaling must be a strict no-op there
+      // -- an unchanged run has to stay byte-identical.
+      it('skips the scaling step for a metres model', async () => {
+        const state = await createJobWithState({ modelScaleToMetres: 1 });
+        expect(state).toHaveProperty('modelScaleToMetres', 1);
+        expect(lastDropletUserData()).toContain('MODEL_SCALE="1"');
+      });
+
+      // A browser holding a cached copy of main.js from before this field
+      // existed was uploading metres, which is what it now defaults to.
+      it('defaults to metres when the field is omitted', async () => {
+        const state = await createJobWithState({});
+        expect(state).toHaveProperty('modelScaleToMetres', 1);
+      });
+
+      // Guessing at an unrecognised factor is the failure this field exists to
+      // prevent, so the run is refused instead of silently mis-scaled.
+      it.each([
+        ['an arbitrary number', 0.5],
+        ['a numeric string', '0.001'],
+        ['zero', 0],
+        ['negative', -0.001],
+        // A client-side NaN reaches the server as an explicit null. That is a
+        // scale that was computed and came out broken, which is not the same as
+        // an old client that never sent one, so it is refused rather than
+        // quietly treated as metres.
+        ['NaN, which arrives as null', Number.NaN],
+        ['null', null],
+        ['a boolean', true]
+      ])('rejects the job when the scale is %s', async (_label, modelScaleToMetres) => {
+        const callsBefore = global.fetch.mock.calls.length;
+
+        const response = await request(app)
+          .post('/api/jobs')
+          .set('Authorization', authHeaderValue)
+          .send({ fileKey: 'uploads/test-car.stl', modelScaleToMetres });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toMatch(/modelScaleToMetres/);
+        // No droplet may be provisioned for a request that was refused.
+        expect(global.fetch.mock.calls.length).toBe(callsBefore);
+      });
+    });
+
     // The droplet writes job.json to S3 itself and only then curls the callback
     // with "|| true". A callback that never lands (job started against a
     // different APP_CALLBACK_URL, transient network failure) must not cost the

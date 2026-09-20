@@ -49,6 +49,16 @@ const DEFAULT_RACE_SPEED_MPH = 30;
 // visualisation scales in the template are calibrated against it.
 const TEMPLATE_REF_SPEED_MS = 20;
 
+// The factors the frontend's Model Units selector can produce (m, cm, mm, in),
+// each converting that unit to the metres the OpenFOAM case is built in.
+const MODEL_SCALES_TO_METRES = [1, 0.01, 0.001, 0.0254];
+const MODEL_SCALE_LABELS = {
+  1: 'metres (no scaling applied)',
+  0.01: 'centimetres (scaled by 0.01 to metres)',
+  0.001: 'millimetres (scaled by 0.001 to metres)',
+  0.0254: 'inches (scaled by 0.0254 to metres)'
+};
+
 // AWS S3 Configuration
 const bucketName = process.env.S3_BUCKET_NAME;
 const region = process.env.AWS_REGION || 'eu-west-2';
@@ -309,7 +319,7 @@ const getJobState = async (jobId) => {
 
 // 1. POST /api/jobs: Queue/start simulation
 app.post('/api/jobs', requireAuth, async (req, res) => {
-  const { fileKey, frontalArea, raceSpeedMph, wheelbase, momentCentreX, fastCheck, runName, purpose } = req.body;
+  const { fileKey, frontalArea, raceSpeedMph, wheelbase, momentCentreX, fastCheck, runName, purpose, modelScaleToMetres } = req.body;
   if (!fileKey) {
     return res.status(400).json({ error: 'fileKey is required' });
   }
@@ -330,6 +340,24 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
   // Strict boolean: anything else means full fidelity, so a malformed request
   // can never silently downgrade a run to the coarse mesh.
   const cleanFastCheck = fastCheck === true;
+  // The factor that converts the uploaded STL's units to metres. A wrong value
+  // here is the exact failure this field exists to prevent -- it would mesh a
+  // car 1000x the wrong size while Aref/lRef/CofR stay correct, so the run
+  // looks fine and the coefficients are nonsense. Accept only the factors the
+  // unit selector can produce; anything else is a client bug worth surfacing.
+  // Only an absent field defaults to metres -- that is a client from before
+  // this field existed, which could only upload metres anyway. An explicit null
+  // is not the same thing: it is what a client-side NaN serialises to, so it
+  // means the scale was computed and came out broken. Guessing metres there
+  // would mis-scale exactly the run we cannot afford to get wrong.
+  const cleanModelScale = modelScaleToMetres === undefined
+    ? 1
+    : MODEL_SCALES_TO_METRES.find(scale => scale === modelScaleToMetres);
+  if (cleanModelScale === undefined) {
+    return res.status(400).json({
+      error: `modelScaleToMetres must be one of ${MODEL_SCALES_TO_METRES.join(', ')}.`
+    });
+  }
   const trimmedRunName = typeof runName === 'string' ? runName.trim().slice(0, 120) : '';
   const cleanRunName = trimmedRunName || `${originalName} — ${new Date().toLocaleString()}`;
   const cleanPurpose = typeof purpose === 'string' ? purpose.trim().slice(0, 1000) : '';
@@ -351,6 +379,7 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
     raceSpeedMph: cleanRaceSpeedMph,
     wheelbase: cleanWheelbase,
     momentCentreX: cleanMomentCentreX,
+    modelScaleToMetres: cleanModelScale,
     fastCheck: cleanFastCheck,
     runName: cleanRunName,
     purpose: cleanPurpose,
@@ -441,6 +470,7 @@ AWS_REGION="${region}"
 FRONTAL_AREA="${cleanFrontalArea !== null ? cleanFrontalArea : ''}"
 WHEELBASE="${cleanWheelbase !== null ? cleanWheelbase.toFixed(4) : ''}"
 MOMENT_CENTRE_X="${cleanMomentCentreX !== null ? cleanMomentCentreX.toFixed(4) : ''}"
+MODEL_SCALE="${cleanModelScale}"
 FAST_CHECK="${cleanFastCheck ? '1' : ''}"
 RACE_SPEED="${raceSpeedMs.toFixed(4)}"
 TURB_KE="${(0.24 * Math.pow(raceSpeedMs / TEMPLATE_REF_SPEED_MS, 2)).toFixed(5)}"
@@ -539,6 +569,28 @@ with open('callback.json', 'w') as f:
        -H "Content-Type: application/json" \\
        -H "X-Job-Token: \$JOB_TOKEN" \\
        -d @callback.json || true
+}
+
+# End the job: save whatever log we have, mark it failed so the UI stops
+# showing it as running, stop the log sync, and destroy this droplet so a
+# failed run can never leave an expensive instance alive.
+fail_and_destroy() {
+  local stage="\$1"
+  local message="\$2"
+
+  echo "==> \$message"
+  if [ -f simulation.log ]; then
+    aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log" || true
+  fi
+  update_job_status "failed" "\$stage" "\$message"
+
+  kill \$LOG_SYNC_PID || true
+
+  DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
+  curl -s -X DELETE \\
+       -H "Authorization: Bearer ${doToken}" \\
+       "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
+  exit 1
 }
 
 # Install zip, unzip, curl, numpy, and matplotlib -- skipped if already
@@ -648,24 +700,31 @@ set -e
 export -f update_job_status
 export JOB_ID JOB_TOKEN CALLBACK_URL S3_BUCKET
 
+# Scale the uploaded STL into metres. The viewer normalises the model to mm for
+# display and derives Aref/lRef/CofR from that in metres, but the STL itself is
+# uploaded raw -- so a millimetre-authored file would otherwise be meshed 1000x
+# oversized in a domain that is metres (blockMeshDict convertToMeters 1), giving
+# coefficients that are wrong by orders of magnitude with nothing to show it.
+# Must happen before Allrun, whose first step (surfaceFeatures) reads the STL.
+# Skipped entirely for a metres model, which is the overwhelmingly common case.
+if [ -n "\$MODEL_SCALE" ] && [ "\$MODEL_SCALE" != "1" ]; then
+  echo "==> Scaling geometry by \$MODEL_SCALE to convert it to metres..."
+  surfaceTransformPoints -scale "(\$MODEL_SCALE \$MODEL_SCALE \$MODEL_SCALE)" \\
+      constant/geometry/Basic_F24.stl constant/geometry/Basic_F24_metres.stl \\
+      2>&1 | tee log.surfaceTransformPoints || true
+  # Checking the output file rather than \$?, which through the pipe is tee's.
+  # Carrying on unscaled would silently reintroduce the exact bug this block
+  # exists to prevent, so a failure has to end the run.
+  if [ ! -s constant/geometry/Basic_F24_metres.stl ]; then
+    fail_and_destroy "mesh_generation" "Could not scale the geometry to metres"
+  fi
+  mv constant/geometry/Basic_F24_metres.stl constant/geometry/Basic_F24.stl
+fi
+
 # Run execution pipeline
 echo "==> Running OpenFOAM pipeline..."
 chmod +x Allrun
-./Allrun > simulation.log 2>&1 || {
-  echo "==> Simulation failed!"
-  aws s3 cp simulation.log "s3://\$S3_BUCKET/results/\$JOB_ID/simulation.log"
-  update_job_status "failed" "solving" "OpenFOAM execution failed"
-  
-  # Terminate log sync background process
-  kill \$LOG_SYNC_PID || true
-  
-  # Self destruct
-  DROPLET_ID=\$(curl -s http://169.254.169.254/metadata/v1/id)
-  curl -s -X DELETE \\
-       -H "Authorization: Bearer ${doToken}" \\
-       "https://api.digitalocean.com/v2/droplets/\$DROPLET_ID"
-  exit 1
-}
+./Allrun > simulation.log 2>&1 || fail_and_destroy "solving" "OpenFOAM execution failed"
 
 # Notify API Server: Run completed, processing results
 update_job_status "running" "processing_results"
@@ -1263,6 +1322,9 @@ function buildJobSummaryMarkdown(jobState) {
   lines.push(`| Frontal area, \`Aref\` | ${num((m && m.aref) || jobState.frontalArea, 4) || na} m² |`);
   lines.push(`| Wheelbase, \`lRef\` | ${num(jobState.wheelbase, 3) || na} m |`);
   lines.push(`| Moment centre, \`CofR\` | ${jobState.momentCentreX !== null && jobState.momentCentreX !== undefined ? `(${num(jobState.momentCentreX, 3)} 0 0)` : na} |`);
+  // Jobs from before the geometry was scaled to metres carry no factor, and
+  // for those the units the model was actually solved at are genuinely unknown.
+  lines.push(`| Model units | ${MODEL_SCALE_LABELS[jobState.modelScaleToMetres] || na} |`);
   lines.push(`| Mesh fidelity | ${jobState.fastCheck ? 'Fast check (coarse, 50 iterations)' : 'Full (refined, 500 iterations)'} |`);
   lines.push('');
 
