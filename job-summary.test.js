@@ -53,6 +53,35 @@ describe('buildJobSummaryMarkdown', () => {
       expect(md).toContain('2026-09-05T21:07:05.930Z');
     });
 
+    // Several runs of one model otherwise produce identical headings, and the
+    // note saying what was being tested was captured but never written out.
+    it('leads with the run name and records what it was for', () => {
+      const md = buildJobSummaryMarkdown(completedJob({
+        runName: 'Lower nose v2',
+        purpose: 'Dropped the nose 15mm to see if drag falls.'
+      }));
+
+      expect(md).toContain('# CFD Summary — Lower nose v2');
+      expect(md).toContain('**Run name:** Lower nose v2');
+      expect(md).toContain('> Dropped the nose 15mm to see if drag falls.');
+    });
+
+    // A multi-line note would break the bullet list it used to sit beside.
+    it('quotes every line of a multi-line purpose', () => {
+      const md = buildJobSummaryMarkdown(completedJob({ purpose: 'First line.\nSecond line.' }));
+
+      expect(md).toContain('> First line.');
+      expect(md).toContain('> Second line.');
+    });
+
+    it('falls back to the model name for a run with no name', () => {
+      const md = buildJobSummaryMarkdown(completedJob({ runName: null, purpose: '' }));
+
+      expect(md).toContain('# CFD Summary — car.stl');
+      expect(md).toContain('**Run name:** not recorded');
+      expect(md).not.toContain('Purpose / notes');
+    });
+
     // Without these the coefficients cannot be checked or reproduced later.
     it('records every value the coefficients were normalised by', () => {
       const md = buildJobSummaryMarkdown(completedJob());

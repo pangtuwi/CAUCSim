@@ -35,7 +35,7 @@
         <img class="brand-logo" src="sandbach_high_dark.png" alt="Sandbach High School Logo">
         <div class="logo-text">
           <h1>CAUC<span>Sim</span></h1>
-          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.64</span></p>
+          <p>F24 Aerodynamic CFD Toolkit <span class="version-badge">v0.65</span></p>
         </div>
       </div>
 
@@ -553,6 +553,19 @@
             </div>
 
             <div class="stage-data-content" id="results-details-loaded" style="display: none;">
+
+            <!-- Which run these numbers belong to and what it was solved with.
+                 Populated by renderRunProvenance. The figures below mean
+                 nothing without it once the history holds several runs. -->
+            <div id="run-provenance" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 10px; margin-bottom: 12px;">
+              <div id="run-provenance-name" style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.35; overflow-wrap: anywhere;">-</div>
+              <div id="run-provenance-file" style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); margin-top: 3px; overflow-wrap: anywhere;"></div>
+              <p id="run-provenance-purpose" style="font-size: 11px; line-height: 1.45; color: var(--text-secondary); margin: 8px 0 0 0; white-space: pre-wrap; overflow-wrap: anywhere;"></p>
+              <details style="margin-top: 8px;">
+                <summary style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; outline-offset: 2px;">Simulation inputs</summary>
+                <dl id="run-provenance-inputs" style="display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 10px; margin: 8px 0 0 0;"></dl>
+              </details>
+            </div>
 
             <!-- Convergence / fidelity banner: set by renderCfdMetrics -->
             <div id="cfd-result-banner" style="display: none; font-size: 11px; line-height: 1.45; padding: 8px 10px; border-radius: 6px; margin-bottom: 12px;"></div>

@@ -1293,14 +1293,28 @@ function buildJobSummaryMarkdown(jobState) {
     return spread === null ? base : `${base} ± ${spread}`;
   };
 
-  lines.push(`# CFD Summary — ${jobState.originalName || 'model'}`);
+  // Title on the run name where there is one: it is what the pupil called this
+  // attempt, and several runs of one model otherwise produce identical headings.
+  lines.push(`# CFD Summary — ${jobState.runName || jobState.originalName || 'model'}`);
   lines.push('');
   lines.push(`- **Job:** \`${jobState.jobId}\``);
+  lines.push(`- **Run name:** ${jobState.runName || na}`);
   lines.push(`- **Model file:** ${jobState.originalName || na}`);
   lines.push(`- **Started:** ${jobState.startedAt || na}`);
   lines.push(`- **Completed:** ${jobState.completedAt || na}`);
   lines.push(`- **Status:** ${jobState.status || na}`);
   lines.push('');
+
+  // What the pupil said they were testing. Free text, so it is quoted rather
+  // than inlined -- a multi-line note would otherwise break the list above.
+  if (jobState.purpose) {
+    lines.push('**Purpose / notes**');
+    lines.push('');
+    for (const line of String(jobState.purpose).split('\n')) {
+      lines.push(`> ${line}`);
+    }
+    lines.push('');
+  }
 
   // Lead with the caveat: whoever opens this file must see it before the table.
   if (jobState.fastCheck) {
