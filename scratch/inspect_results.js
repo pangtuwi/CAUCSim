@@ -38,18 +38,7 @@ async function run() {
     execSync(`unzip -o "${tempZip}" -d "${tempExtract}"`);
 
     const vtkFile = path.join(tempExtract, 'postProcessing/cutPlane/50/yNormal.vtk');
-    if (fs.existsSync(vtkFile)) {
-      const content = fs.readFileSync(vtkFile, 'utf8');
-      console.log("=== First 60 lines of yNormal.vtk ===");
-      console.log(content.split('\n').slice(0, 60).join('\n'));
-      
-      console.log("=== Lines around POINT_DATA ===");
-      const lines = content.split('\n');
-      const pdIndex = lines.findIndex(line => line.includes('POINT_DATA'));
-      if (pdIndex !== -1) {
-        console.log(lines.slice(pdIndex, pdIndex + 40).join('\n'));
-      }
-    } else {
+    if (!fs.existsSync(vtkFile)) {
       console.log("yNormal.vtk not found!");
     }
   } catch (err) {
