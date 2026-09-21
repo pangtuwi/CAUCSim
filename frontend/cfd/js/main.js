@@ -813,6 +813,16 @@ function onWindowResize() {
   renderer.setSize(width, height);
 }
 
+function escapeHtml(unsafe) {
+  if (unsafe === undefined || unsafe === null) return '';
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // --- STL Loading & Calculations ---
 function loadSTL(originalName, viewUrl, fileKey) {
   if (fileKey !== activeFileKey) {
@@ -870,7 +880,7 @@ function loadSTL(originalName, viewUrl, fileKey) {
   const loader = new STLLoader();
   
   // Show a loading text in title
-  activeModelTitle.innerHTML = `Loading 3D mesh... <span style="font-size:11px; opacity:0.7;">(${originalName})</span>`;
+  activeModelTitle.innerHTML = `Loading 3D mesh... <span style="font-size:11px; opacity:0.7;">(${escapeHtml(originalName)})</span>`;
 
   // Set status indicator to loading state
   if (metaStatusContainer) metaStatusContainer.style.color = 'var(--warning-color)';
@@ -1382,7 +1392,7 @@ function renderLibraryList(files, selectFileKey = null) {
 
     li.innerHTML = `
       <div class="model-item-details">
-        <span class="model-item-name" title="${file.originalName}">${file.originalName}</span>
+        <span class="model-item-name" title="${escapeHtml(file.originalName)}">${escapeHtml(file.originalName)}</span>
         <div class="model-item-meta">
           <span>${sizeKB} KB</span>
           <span>•</span>
@@ -2245,9 +2255,10 @@ function renderHistoryList(jobs) {
     const statusColor = statusColors[job.status] || '#ffaa00';
     const cdText = job.metrics && job.metrics.cd !== undefined ? `Cd ${job.metrics.cd.toFixed(3)}` : '';
 
+    const displayName = job.runName || job.originalName || job.jobId;
     li.innerHTML = `
       <div class="model-item-details">
-        <span class="model-item-name" title="${job.runName || job.originalName || job.jobId}">${job.runName || job.originalName || job.jobId}</span>
+        <span class="model-item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
         <div class="model-item-meta">
           <span style="color: ${statusColor};">${job.status || 'unknown'}</span>
           <span>•</span>
