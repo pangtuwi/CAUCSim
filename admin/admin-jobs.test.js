@@ -37,16 +37,16 @@ describe('GET /api/admin/jobs', () => {
   it('never exposes jobToken', async () => {
     support.putJob(support.makeJob({ jobId: 'job-1700000000001-aaaaaaaa' }));
 
-    for (const path of [
+    await Promise.all([
       '/api/admin/jobs',
       '/api/admin/jobs/job-1700000000001-aaaaaaaa',
       '/api/admin/jobs/job-1700000000001-aaaaaaaa/job.json'
-    ]) {
+    ].map(async (path) => {
       const res = await get(path);
       expect(res.status).toBe(200);
       expect(res.text).not.toContain('jobToken');
       expect(res.text).not.toContain('SUPER-SECRET-CALLBACK-TOKEN');
-    }
+    }));
   });
 
   // The behaviour that makes this app different from GET /api/jobs in the CFD
@@ -113,20 +113,20 @@ describe('GET /api/admin/jobs/:jobId', () => {
   });
 
   it('400s on a malformed job id', async () => {
-    for (const bad of ['not-a-job', 'job-abc-12345678', 'job-1700000000001-ZZZZZZZZ', 'results']) {
+    await Promise.all(['not-a-job', 'job-abc-12345678', 'job-1700000000001-ZZZZZZZZ', 'results'].map(async (bad) => {
       const res = await get(`/api/admin/jobs/${bad}`);
       expect(res.status).toBe(400);
-    }
+    }));
   });
 
   // Traversal is stopped before the route by Express path normalisation, so
   // the status is 404 rather than 400 — what matters is that it never reaches
   // S3 with a crafted key.
   it('never serves a traversing job id', async () => {
-    for (const bad of ['..', '../..', '%2e%2e%2f']) {
+    await Promise.all(['..', '../..', '%2e%2e%2f'].map(async (bad) => {
       const res = await get(`/api/admin/jobs/${bad}`);
       expect([400, 404]).toContain(res.status);
-    }
+    }));
   });
 });
 
