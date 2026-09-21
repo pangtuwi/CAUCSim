@@ -14,7 +14,7 @@ const { cognitoClient } = require('./aws');
 const { userPoolId, adminGroup } = require('./config');
 
 // ListUsers caps Limit at 60, so the pagination loop is mandatory rather than
-// an optimisation. The page cap stops a pagination bug spinning forever.
+// an optimisation. The page cap prevents an infinite pagination loop.
 const PAGE_SIZE = 60;
 const MAX_PAGES = 50;
 
