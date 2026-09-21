@@ -30,7 +30,6 @@ async function run() {
     const buffer = await response.Body.transformToByteArray();
     fs.writeFileSync(tempZip, buffer);
 
-    console.log("Unzipping results...");
     if (fs.existsSync(tempExtract)) {
       fs.rmSync(tempExtract, { recursive: true, force: true });
     }
