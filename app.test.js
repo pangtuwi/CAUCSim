@@ -411,7 +411,10 @@ describe('CAUCSim API Tests (Strict Production Mode)', () => {
 
         const userData = lastDropletUserData();
         expect(userData).toContain(`MODEL_SCALE="${scale}"`);
-        expect(userData).toContain('surfaceTransformPoints');
+        // OpenFOAM 10+ syntax: a transformations string, not the old -scale
+        // option, which OpenFOAM 13 rejects.
+        expect(userData).toContain('surfaceTransformPoints "scale=($MODEL_SCALE $MODEL_SCALE $MODEL_SCALE)"');
+        expect(userData).not.toContain('surfaceTransformPoints -scale');
       });
 
       // The case is already in metres, so scaling must be a strict no-op there

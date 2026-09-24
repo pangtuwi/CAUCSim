@@ -1136,6 +1136,13 @@ function computeStats(geometry, size) {
   if (l > 10000 || w > 10000 || h > 10000) {
     scaleStatus = 'fail';
     scaleReason = `Your car comes out ${(l / 1000).toFixed(1)} m long, which is far too big for an F24 car. Check the Model Units setting matches how your CAD program saved the file.`;
+  } else if (l < 500) {
+    // The mirror image: a metres file read as millimetres comes out a few mm
+    // long. Without this the only symptom was a viewport that looked empty,
+    // because the viewer's near plane and minimum orbit distance are fixed in
+    // mm and a car that small falls inside them.
+    scaleStatus = 'fail';
+    scaleReason = `Your car comes out ${l >= 1 ? l.toFixed(1) : l.toFixed(3)} mm long, which is far too small for an F24 car. Check the Model Units setting matches how your CAD program saved the file.`;
   }
 
   if (regCfdScale && regCfdScaleVal) {

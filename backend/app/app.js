@@ -709,7 +709,10 @@ export JOB_ID JOB_TOKEN CALLBACK_URL S3_BUCKET
 # Skipped entirely for a metres model, which is the overwhelmingly common case.
 if [ -n "\$MODEL_SCALE" ] && [ "\$MODEL_SCALE" != "1" ]; then
   echo "==> Scaling geometry by \$MODEL_SCALE to convert it to metres..."
-  surfaceTransformPoints -scale "(\$MODEL_SCALE \$MODEL_SCALE \$MODEL_SCALE)" \\
+  # OpenFOAM 10+ takes a transformations string as the first argument; the
+  # older "-scale" option is rejected outright, which would end every
+  # non-metre run here before it began.
+  surfaceTransformPoints "scale=(\$MODEL_SCALE \$MODEL_SCALE \$MODEL_SCALE)" \\
       constant/geometry/Basic_F24.stl constant/geometry/Basic_F24_metres.stl \\
       2>&1 | tee log.surfaceTransformPoints || true
   # Checking the output file rather than \$?, which through the pipe is tee's.
